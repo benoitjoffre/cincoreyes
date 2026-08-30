@@ -291,6 +291,28 @@ input:focus {
 .mini-brand svg {
   width: 22px;
 }
+.leave-button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  font-weight: 700;
+}
+.leave-button:hover:not(:disabled) {
+  color: var(--coral);
+  border-color: var(--coral);
+}
+.game-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
 .lobby-shell {
   min-height: 100vh;
   background-color: #eef0e8;
@@ -783,6 +805,10 @@ input:focus {
   font-size: clamp(40px, 7vw, 76px);
   max-width: 850px;
 }
+.results-leave-button {
+  width: auto;
+  margin-top: 28px;
+}
 .result-row {
   width: min(500px, 90vw);
   display: grid;
@@ -838,6 +864,13 @@ input:focus {
   }
   .table-code {
     display: none;
+  }
+  .game-header-actions .leave-button span {
+    display: none;
+  }
+  .game-header-actions .leave-button {
+    width: 40px;
+    padding: 0;
   }
   .scoreboard {
     position: static;

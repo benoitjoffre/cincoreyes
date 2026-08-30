@@ -3,7 +3,7 @@ import { findValidMelds } from "@cincoreyes/game-engine";
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { BookOpen, Check, Copy, Crown, LogIn, Plus, Share2, Sparkles, Trophy, Users, X } from "lucide-react";
+import { BookOpen, Check, Copy, Crown, LogIn, LogOut, Plus, Share2, Sparkles, Trophy, Users, X } from "lucide-react";
 import { useEffect, useRef, useState, type ButtonHTMLAttributes } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
@@ -238,12 +238,14 @@ function Lobby({
   busy,
   error,
   onStart,
+  onLeave,
 }: {
   state: ClientGameState;
   playerId: string;
   busy: boolean;
   error: string;
   onStart: () => void;
+  onLeave: () => void;
 }) {
   const me = state.players.find(({ id }) => id === playerId);
   const [shareStatus, setShareStatus] = useState<"idle" | "copied">("idle");
@@ -277,7 +279,9 @@ function Lobby({
         <span className="mini-brand">
           <Crown /> Cinq Royaumes
         </span>
-        <span>En attente</span>
+        <button className="leave-button" type="button" disabled={busy} onClick={onLeave}>
+          <LogOut size={17} /> Quitter la salle
+        </button>
       </header>
       <section className="lobby-content">
         <p className="eyebrow">Salle privée</p>
@@ -356,6 +360,7 @@ function Game({
   onDraw,
   onDiscard,
   onGoOut,
+  onLeave,
 }: {
   state: ClientGameState;
   playerId: string;
@@ -364,6 +369,7 @@ function Game({
   onDraw: (source: "deck" | "discard") => void;
   onDiscard: (cardId: string) => void;
   onGoOut: (melds: MeldSubmission[], discardCardId?: string) => void;
+  onLeave: () => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [customOrder, setCustomOrder] = useState<{ roundRank: number; cardIds: string[] } | null>(null);
@@ -424,6 +430,9 @@ function Game({
             <b>{player.score} pts</b>
           </div>
         ))}
+        <button className="primary-button results-leave-button" type="button" disabled={busy} onClick={onLeave}>
+          <LogOut size={18} /> Retour à l’accueil
+        </button>
       </main>
     );
   }
@@ -439,7 +448,12 @@ function Game({
           <strong>{state.roundRank}</strong>
           <span>Folle : {state.roundRank}</span>
         </div>
-        <span className="table-code">Salle {state.roomCode}</span>
+        <div className="game-header-actions">
+          <span className="table-code">Salle {state.roomCode}</span>
+          <button className="leave-button" type="button" disabled={busy} onClick={onLeave}>
+            <LogOut size={17} /> <span>Quitter</span>
+          </button>
+        </div>
       </header>
       <section className="opponents">
         {state.players
@@ -577,11 +591,19 @@ export default function App() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    const handleState = (state: ClientGameState) => setGameState(state);
+    const handleState = (state: ClientGameState) => {
+      setGameState(state);
+      if (state.phase === "game-ended") localStorage.removeItem(sessionStorageKey);
+    };
     const handleConnect = async () => {
       const stored = localStorage.getItem(sessionStorageKey);
       if (!stored) return;
       const previous = JSON.parse(stored) as SessionData;
+      const invitedRoomCode = new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase();
+      if (invitedRoomCode && invitedRoomCode !== previous.roomCode) {
+        localStorage.removeItem(sessionStorageKey);
+        return;
+      }
       const result = await emitCommand<SessionData>("room:resume", {
         sessionToken: previous.sessionToken,
       });
@@ -612,6 +634,26 @@ export default function App() {
     setSession(next);
     localStorage.setItem(sessionStorageKey, JSON.stringify(next));
   };
+  const clearSession = () => {
+    localStorage.removeItem(sessionStorageKey);
+    setSession(null);
+    setGameState(null);
+    setError("");
+    const cleanUrl = new URL(window.location.href);
+    cleanUrl.searchParams.delete("room");
+    window.history.replaceState({}, "", cleanUrl);
+  };
+  const leaveRoom = async () => {
+    setBusy(true);
+    setError("");
+    const result = await emitCommand("room:leave", {});
+    setBusy(false);
+    if (!result.ok && result.code !== "NOT_IN_ROOM") {
+      setError(result.message);
+      return;
+    }
+    clearSession();
+  };
   if (!session || !gameState)
     return (
       <Home
@@ -623,7 +665,14 @@ export default function App() {
     );
   if (gameState.phase === "lobby")
     return (
-      <Lobby state={gameState} playerId={session.playerId} busy={busy} error={error} onStart={() => run("game:start", { actionId: actionId() })} />
+      <Lobby
+        state={gameState}
+        playerId={session.playerId}
+        busy={busy}
+        error={error}
+        onStart={() => run("game:start", { actionId: actionId() })}
+        onLeave={leaveRoom}
+      />
     );
   return (
     <Game
@@ -635,6 +684,7 @@ export default function App() {
       onDraw={(source) => run("turn:draw", { actionId: actionId(), source })}
       onDiscard={(cardId) => run("turn:discard", { actionId: actionId(), cardId })}
       onGoOut={(melds, discardCardId) => run("turn:go-out", { actionId: actionId(), melds, discardCardId })}
+      onLeave={leaveRoom}
     />
   );
 }

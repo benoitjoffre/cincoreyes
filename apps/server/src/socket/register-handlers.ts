@@ -64,6 +64,16 @@ export function registerHandlers(io: GameServer, socket: GameSocket, rooms: Room
   socket.on("room:resume", (payload, acknowledge) =>
     sessionCommand(() => rooms.resume(z.string().min(20).parse(payload.sessionToken), socket.id), acknowledge),
   );
+  socket.on("room:leave", (_payload, acknowledge) => {
+    try {
+      const roomCode = rooms.leave(socket.id);
+      if (roomCode) socket.leave(roomCode);
+      acknowledge({ ok: true, data: undefined });
+      if (roomCode) broadcast(roomCode);
+    } catch (error) {
+      acknowledge(failure(error));
+    }
+  });
   socket.on("game:start", (payload, acknowledge) =>
     gameCommand(
       payload,

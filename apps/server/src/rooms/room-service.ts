@@ -102,6 +102,41 @@ export class RoomService {
     return { ...session, sessionToken };
   }
 
+  leave(socketId: string): string | null {
+    const identity = this.findPlayerBySocket(socketId);
+    if (!identity) throw new GameError("NOT_IN_ROOM", "Vous n’êtes pas dans une salle.");
+    const room = this.getRoom(identity.roomCode);
+    const playerIndex = room.players.findIndex(({ id }) => id === identity.playerId);
+    const player = room.players[playerIndex];
+    if (!player) throw new GameError("PLAYER_NOT_FOUND", "Joueur introuvable.");
+    const wasActivePlayer = playerIndex === room.activeIndex;
+
+    this.sessions.delete(player.sessionToken);
+    room.players.splice(playerIndex, 1);
+    room.finalTurnPlayerIds.delete(player.id);
+
+    if (room.players.length === 0) {
+      this.rooms.delete(room.code);
+      return null;
+    }
+
+    if (player.isHost) room.players[0]!.isHost = true;
+    room.activeIndex = this.adjustIndexAfterRemoval(room.activeIndex, playerIndex, room.players.length);
+    room.dealerIndex = this.adjustIndexAfterRemoval(room.dealerIndex, playerIndex, room.players.length);
+
+    if (room.phase !== "lobby" && room.phase !== "game-ended") {
+      if (room.players.length < 2) {
+        room.phase = "game-ended";
+      } else if (wasActivePlayer || player.id === room.wentOutPlayerId) {
+        room.phase = "drawing";
+      }
+      if (room.players.length >= 2 && room.wentOutPlayerId && room.finalTurnPlayerIds.size === 0) this.finishRound(room);
+    }
+
+    this.bump(room);
+    return room.code;
+  }
+
   start(roomCode: string, playerId: string, actionId: string): void {
     const room = this.getRoom(roomCode);
     this.acceptAction(room, actionId);
@@ -335,6 +370,12 @@ export class RoomService {
     const player = room.players.find(({ id }) => id === playerId);
     if (!player) throw new GameError("PLAYER_NOT_FOUND", "Joueur introuvable.");
     return player;
+  }
+
+  private adjustIndexAfterRemoval(currentIndex: number, removedIndex: number, remainingCount: number): number {
+    if (currentIndex > removedIndex) return currentIndex - 1;
+    if (currentIndex >= remainingCount) return 0;
+    return currentIndex;
   }
 
   private bump(room: RoomState): void {
