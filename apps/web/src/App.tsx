@@ -7,6 +7,8 @@ import { BookOpen, Check, Copy, Crown, LogIn, LogOut, Plus, Share2, Sparkles, Tr
 import { useEffect, useRef, useState, type ButtonHTMLAttributes } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
+import { useI18n } from "./i18n-context";
+import { LanguageSwitcher, type TranslationKey } from "./i18n";
 
 const configuredServerUrl = import.meta.env.VITE_SERVER_URL?.trim();
 const configuredServerHost = import.meta.env.VITE_SERVER_HOST?.trim();
@@ -43,8 +45,9 @@ function Card({
   buttonRef?: (node: HTMLButtonElement | null) => void;
   dragProps?: ButtonHTMLAttributes<HTMLButtonElement>;
 }) {
+  const { language, t } = useI18n();
   const isJoker = card.rank === "joker";
-  const label = isJoker ? "JOKER" : card.rank === 11 ? "V" : card.rank === 12 ? "D" : card.rank === 13 ? "R" : card.rank;
+  const label = isJoker ? "JOKER" : card.rank === 11 ? (language === "fr" ? "V" : "J") : card.rank === 12 ? (language === "fr" ? "D" : "Q") : "R";
   const symbol = isJoker ? "✦" : suitSymbols[card.suit as Suit];
   return (
     <button
@@ -54,7 +57,7 @@ function Card({
       {...dragProps}
       onClick={onClick}
       aria-pressed={selected}
-      aria-label={isJoker ? "Joker" : `${label} ${card.suit}`}
+      aria-label={isJoker ? t("card.joker") : `${label} ${t(`suit.${card.suit}` as TranslationKey)}`}
     >
       <span className="card-corner">
         {label}
@@ -92,22 +95,22 @@ function Home({
   onCreate: (name: string) => void;
   onJoin: (name: string, code: string) => void;
 }) {
+  const { t } = useI18n();
   const [name, setName] = useState("");
   const [code, setCode] = useState(() => new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase().slice(0, 6) ?? "");
   const rulesDialogRef = useRef<HTMLDialogElement>(null);
   return (
     <main className="home-shell">
       <section className="brand-panel">
+        <div className="home-language">
+          <LanguageSwitcher />
+        </div>
         <div className="brand-mark">
           <Crown />
         </div>
-        <p className="eyebrow">Jeu de rami en ligne</p>
-        <h1>
-          Cinq
-          <br />
-          Royaumes
-        </h1>
-        <p className="brand-copy">Onze manches. Cinq couleurs. Une seule couronne pour le score le plus bas.</p>
+        <p className="eyebrow">{t("home.tagline")}</p>
+        <h1>{t("brand.name")}</h1>
+        <p className="brand-copy">{t("home.description")}</p>
         <div className="suit-ribbon" aria-hidden="true">
           {Object.entries(suitSymbols).map(([suit, symbol]) => (
             <span className={`suit-${suit}`} key={suit}>
@@ -118,24 +121,24 @@ function Home({
       </section>
       <section className="entry-panel">
         <div className="entry-inner">
-          <p className="eyebrow">Partie privée</p>
-          <h2>Prends place à la table</h2>
-          <label htmlFor="player-name">Ton pseudo</label>
+          <p className="eyebrow">{t("home.privateGame")}</p>
+          <h2>{t("home.title")}</h2>
+          <label htmlFor="player-name">{t("home.nickname")}</label>
           <input
             id="player-name"
             value={name}
             maxLength={24}
             autoComplete="nickname"
             onChange={(event) => setName(event.target.value)}
-            placeholder="Ex. Camille"
+            placeholder={t("home.nicknamePlaceholder")}
           />
           <button className="primary-button" disabled={busy || !name.trim()} onClick={() => onCreate(name)}>
-            <Plus size={19} /> Créer une salle
+            <Plus size={19} /> {t("home.create")}
           </button>
           <div className="divider">
-            <span>ou rejoindre</span>
+            <span>{t("home.orJoin")}</span>
           </div>
-          <label htmlFor="room-code">Code de salle</label>
+          <label htmlFor="room-code">{t("home.roomCode")}</label>
           <div className="join-row">
             <input
               id="room-code"
@@ -145,7 +148,12 @@ function Home({
               onChange={(event) => setCode(event.target.value.toUpperCase())}
               placeholder="ABC234"
             />
-            <button className="icon-button" title="Rejoindre" disabled={busy || !name.trim() || code.length !== 6} onClick={() => onJoin(name, code)}>
+            <button
+              className="icon-button"
+              title={t("home.join")}
+              disabled={busy || !name.trim() || code.length !== 6}
+              onClick={() => onJoin(name, code)}
+            >
               <LogIn />
             </button>
           </div>
@@ -155,10 +163,10 @@ function Home({
             </p>
           )}
           <p className="privacy-note">
-            <Users size={16} /> 2 à 7 joueurs, sans compte
+            <Users size={16} /> {t("home.privacy")}
           </p>
           <button className="rules-button" type="button" onClick={() => rulesDialogRef.current?.showModal()}>
-            <BookOpen size={18} /> Règles du jeu
+            <BookOpen size={18} /> {t("rules.open")}
           </button>
         </div>
       </section>
@@ -172,59 +180,47 @@ function Home({
       >
         <div className="rules-header">
           <div>
-            <p className="eyebrow">Cinq Royaumes</p>
-            <h2 id="rules-title">Règles du jeu</h2>
+            <p className="eyebrow">{t("brand.name")}</p>
+            <h2 id="rules-title">{t("rules.open")}</h2>
           </div>
-          <button className="rules-close" type="button" onClick={() => rulesDialogRef.current?.close()} aria-label="Fermer les règles">
+          <button className="rules-close" type="button" onClick={() => rulesDialogRef.current?.close()} aria-label={t("rules.close")}>
             <X />
           </button>
         </div>
         <div className="rules-content">
           <section>
-            <h3>But du jeu</h3>
-            <p>
-              Former des livres et des suites pour conserver le moins de points possible. Après les onze manches, le joueur au score total le plus bas
-              gagne.
-            </p>
+            <h3>{t("rules.goalTitle")}</h3>
+            <p>{t("rules.goal")}</p>
           </section>
           <section>
-            <h3>Les onze manches</h3>
-            <p>
-              La première manche se joue avec 3 cartes et les 3 sont folles. Chaque manche ajoute une carte et avance la valeur folle, jusqu’à la
-              dernière manche avec 13 cartes et les Rois fous.
-            </p>
+            <h3>{t("rules.roundsTitle")}</h3>
+            <p>{t("rules.rounds")}</p>
           </section>
           <section>
-            <h3>À ton tour</h3>
+            <h3>{t("rules.turnTitle")}</h3>
             <ol>
-              <li>Pioche la première carte de la pioche ou de la défausse.</li>
-              <li>Réorganise ta main pour préparer tes combinaisons.</li>
-              <li>Défausse une carte pour terminer ton tour.</li>
+              <li>{t("rules.turnDraw")}</li>
+              <li>{t("rules.turnArrange")}</li>
+              <li>{t("rules.turnDiscard")}</li>
             </ol>
           </section>
           <section>
-            <h3>Combinaisons valides</h3>
+            <h3>{t("rules.meldsTitle")}</h3>
             <p>
-              <strong>Livre :</strong> au moins 3 cartes de même valeur, quelles que soient leurs couleurs.
+              <strong>{t("rules.bookLabel")}</strong> {t("rules.book")}
             </p>
             <p>
-              <strong>Suite :</strong> au moins 3 cartes consécutives de la même couleur.
+              <strong>{t("rules.runLabel")}</strong> {t("rules.run")}
             </p>
-            <p>Les Jokers et toutes les cartes de la valeur folle de la manche peuvent remplacer une carte manquante.</p>
+            <p>{t("rules.wild")}</p>
           </section>
           <section>
-            <h3>Sortir</h3>
-            <p>
-              Si toute ta main forme des combinaisons, tu peux sortir immédiatement sans piocher. Après une pioche, tu peux aussi sortir en
-              choisissant une carte à défausser. Les autres joueurs jouent alors un dernier tour.
-            </p>
+            <h3>{t("rules.goOutTitle")}</h3>
+            <p>{t("rules.goOut")}</p>
           </section>
           <section>
-            <h3>Calcul des points</h3>
-            <p>
-              Les cartes placées dans des combinaisons valent 0. Seules les cartes restantes sont comptées : leur valeur faciale, 11 pour un Valet, 12
-              pour une Dame, 13 pour un Roi, 20 pour une carte folle et 50 pour un Joker.
-            </p>
+            <h3>{t("rules.scoringTitle")}</h3>
+            <p>{t("rules.scoring")}</p>
           </section>
         </div>
       </dialog>
@@ -247,6 +243,7 @@ function Lobby({
   onStart: () => void;
   onLeave: () => void;
 }) {
+  const { t } = useI18n();
   const me = state.players.find(({ id }) => id === playerId);
   const [shareStatus, setShareStatus] = useState<"idle" | "copied">("idle");
   const shareRoom = async () => {
@@ -255,8 +252,8 @@ function Lobby({
     invitationUrl.hash = "";
     invitationUrl.searchParams.set("room", state.roomCode);
     const shareData = {
-      title: "Cinq Royaumes",
-      text: `Rejoins ma partie de Cinq Royaumes avec le code ${state.roomCode}.`,
+      title: t("brand.name"),
+      text: t("lobby.shareText", { code: state.roomCode }),
       url: invitationUrl.toString(),
     };
 
@@ -277,26 +274,29 @@ function Lobby({
     <main className="lobby-shell">
       <header className="topbar">
         <span className="mini-brand">
-          <Crown /> Cinq Royaumes
+          <Crown /> {t("brand.name")}
         </span>
-        <button className="leave-button" type="button" disabled={busy} onClick={onLeave}>
-          <LogOut size={17} /> Quitter la salle
-        </button>
+        <div className="topbar-actions">
+          <LanguageSwitcher />
+          <button className="leave-button" type="button" disabled={busy} onClick={onLeave}>
+            <LogOut size={17} /> <span>{t("lobby.leave")}</span>
+          </button>
+        </div>
       </header>
       <section className="lobby-content">
-        <p className="eyebrow">Salle privée</p>
-        <h1>La table se remplit</h1>
-        <button className="room-code" onClick={() => navigator.clipboard.writeText(state.roomCode)} title="Copier le code">
+        <p className="eyebrow">{t("lobby.privateRoom")}</p>
+        <h1>{t("lobby.title")}</h1>
+        <button className="room-code" onClick={() => navigator.clipboard.writeText(state.roomCode)} title={t("lobby.copyCode")}>
           <span>{state.roomCode}</span>
           <Copy size={20} />
         </button>
         <div className="invite-actions">
           <button className="secondary-button share-button" type="button" onClick={shareRoom}>
             {shareStatus === "copied" ? <Check size={18} /> : <Share2 size={18} />}
-            {shareStatus === "copied" ? "Lien copié" : "Partager la partie"}
+            {shareStatus === "copied" ? t("lobby.linkCopied") : t("lobby.share")}
           </button>
           <span className="share-status" aria-live="polite">
-            {shareStatus === "copied" ? "Le lien d’invitation est copié." : ""}
+            {shareStatus === "copied" ? t("lobby.linkCopiedStatus") : ""}
           </span>
         </div>
         <div className="player-list">
@@ -306,19 +306,19 @@ function Lobby({
               <span className="player-avatar">{player.name.slice(0, 1).toUpperCase()}</span>
               <strong>
                 {player.name}
-                {player.id === playerId ? " (toi)" : ""}
+                {player.id === playerId ? ` (${t("lobby.you")})` : ""}
               </strong>
-              <span className="player-status">{player.isHost ? "Hôte" : "Prêt"}</span>
+              <span className="player-status">{player.isHost ? t("lobby.host") : t("lobby.ready")}</span>
             </div>
           ))}
-          {state.players.length < 7 && <div className="empty-seat">En attente d’un joueur…</div>}
+          {state.players.length < 7 && <div className="empty-seat">{t("lobby.waitingPlayer")}</div>}
         </div>
         {me?.isHost ? (
           <button className="primary-button start-button" disabled={busy || state.players.length < 2} onClick={onStart}>
-            <Sparkles size={19} /> Lancer la partie
+            <Sparkles size={19} /> {t("lobby.start")}
           </button>
         ) : (
-          <p className="waiting-copy">L’hôte lancera la partie.</p>
+          <p className="waiting-copy">{t("lobby.hostWillStart")}</p>
         )}
         {error && (
           <p className="error-message" role="alert">
@@ -331,19 +331,20 @@ function Lobby({
 }
 
 function Scoreboard({ state, playerId }: { state: ClientGameState; playerId: string }) {
+  const { t } = useI18n();
   const ranking = [...state.players].sort((left, right) => left.score - right.score);
 
   return (
-    <aside className="scoreboard" aria-label="Classement">
+    <aside className="scoreboard" aria-label={t("game.scores")}>
       <div className="scoreboard-title">
-        <Trophy size={15} /> Scores
+        <Trophy size={15} /> {t("game.scores")}
       </div>
       {ranking.map((player, index) => (
         <div className="scoreboard-row" key={player.id}>
           <span>{index + 1}</span>
           <strong>
             {player.name}
-            {player.id === playerId ? " · toi" : ""}
+            {player.id === playerId ? ` · ${t("lobby.you")}` : ""}
           </strong>
           <b>{player.score}</b>
         </div>
@@ -371,6 +372,7 @@ function Game({
   onGoOut: (melds: MeldSubmission[], discardCardId?: string) => void;
   onLeave: () => void;
 }) {
+  const { t } = useI18n();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [customOrder, setCustomOrder] = useState<{ roundRank: number; cardIds: string[] } | null>(null);
   const sensors = useSensors(
@@ -421,17 +423,17 @@ function Game({
     return (
       <main className="results-shell">
         <Crown size={54} />
-        <p className="eyebrow">Partie terminée</p>
-        <h1>{ranking[0]?.name} remporte la couronne</h1>
+        <p className="eyebrow">{t("game.finished")}</p>
+        <h1>{t("game.winner", { name: ranking[0]?.name ?? "" })}</h1>
         {ranking.map((player, index) => (
           <div className="result-row" key={player.id}>
             <span>#{index + 1}</span>
             <strong>{player.name}</strong>
-            <b>{player.score} pts</b>
+            <b>{t("game.points", { count: player.score })}</b>
           </div>
         ))}
         <button className="primary-button results-leave-button" type="button" disabled={busy} onClick={onLeave}>
-          <LogOut size={18} /> Retour à l’accueil
+          <LogOut size={18} /> {t("game.home")}
         </button>
       </main>
     );
@@ -441,17 +443,18 @@ function Game({
       <Scoreboard state={state} playerId={playerId} />
       <header className="game-header">
         <span className="mini-brand">
-          <Crown /> Cinq Royaumes
+          <Crown /> {t("brand.name")}
         </span>
         <div className="round-info">
-          <small>Manche</small>
+          <small>{t("game.round")}</small>
           <strong>{state.roundRank}</strong>
-          <span>Folle : {state.roundRank}</span>
+          <span>{t("game.wild", { rank: state.roundRank })}</span>
         </div>
         <div className="game-header-actions">
-          <span className="table-code">Salle {state.roomCode}</span>
+          <span className="table-code">{t("game.room", { code: state.roomCode })}</span>
+          <LanguageSwitcher />
           <button className="leave-button" type="button" disabled={busy} onClick={onLeave}>
-            <LogOut size={17} /> <span>Quitter</span>
+            <LogOut size={17} /> <span>{t("game.leave")}</span>
           </button>
         </div>
       </header>
@@ -464,22 +467,22 @@ function Game({
               <div>
                 <strong>{player.name}</strong>
                 <small>
-                  {player.score} pts · {player.cardCount} cartes
+                  {t("game.points", { count: player.score })} · {t("game.cards", { count: player.cardCount })}
                 </small>
               </div>
-              {!player.connected && <span className="offline-dot">Absent</span>}
+              {!player.connected && <span className="offline-dot">{t("game.away")}</span>}
             </div>
           ))}
       </section>
       <section className="table-center">
         <div className="turn-banner">
           {state.phase === "paused"
-            ? "Partie en pause"
+            ? t("game.paused")
             : wentOutPlayer
-              ? `${wentOutPlayer.name} est sorti${wentOutPlayer.id === playerId ? " · bravo !" : " ! Dernier tour"}`
+              ? t(wentOutPlayer.id === playerId ? "game.wentOutSelf" : "game.wentOutOther", { name: wentOutPlayer.name })
               : isMyTurn
-                ? "À toi de jouer"
-                : `Tour de ${activePlayer?.name ?? "…"}`}
+                ? t("game.yourTurn")
+                : t("game.playerTurn", { name: activePlayer?.name ?? "…" })}
         </div>
         {state.revealedPlayerMelds.length > 0 && (
           <div className="revealed-area" aria-live="polite">
@@ -489,12 +492,12 @@ function Game({
                 <section className="revealed-player" key={revealedPlayerId}>
                   <div className="revealed-title">
                     <Crown size={17} />
-                    <strong>{player?.name ?? "Un joueur"} sort ses cartes</strong>
+                    <strong>{t("game.playerReveals", { name: player?.name ?? t("game.aPlayer") })}</strong>
                   </div>
                   <div className="revealed-melds">
                     {melds.map((meld, meldIndex) => (
                       <div className="revealed-meld" key={`${revealedPlayerId}-${meld.type}-${meldIndex}`}>
-                        <small>{meld.type === "book" ? "Livre" : "Suite"}</small>
+                        <small>{t(meld.type === "book" ? "game.book" : "game.run")}</small>
                         <div>
                           {meld.cards.map((card) => (
                             <Card key={card.id} card={card} />
@@ -509,38 +512,42 @@ function Game({
           </div>
         )}
         <div className="piles">
-          <button className="deck-pile" disabled={!canDraw || busy} onClick={() => onDraw("deck")} aria-label="Piocher">
+          <button className="deck-pile" disabled={!canDraw || busy} onClick={() => onDraw("deck")} aria-label={t("game.draw")}>
             <Crown />
             <span>{state.drawPileCount}</span>
           </button>
           <div className="discard-zone">
-            {state.discardTop ? <Card card={state.discardTop} onClick={canDraw ? () => onDraw("discard") : undefined} /> : <span>Vide</span>}
-            <small>Défausse</small>
+            {state.discardTop ? (
+              <Card card={state.discardTop} onClick={canDraw ? () => onDraw("discard") : undefined} />
+            ) : (
+              <span>{t("game.empty")}</span>
+            )}
+            <small>{t("game.discardPile")}</small>
           </div>
         </div>
       </section>
       <section className="hand-zone">
         <div className="hand-toolbar">
           <div>
-            <small>Ta main</small>
-            <strong>{state.hand.length} cartes</strong>
+            <small>{t("game.yourHand")}</small>
+            <strong>{t("game.cards", { count: state.hand.length })}</strong>
           </div>
           <p className={`turn-hint${canGoOut ? " ready" : ""}`}>
             {canGoOutDirectly
-              ? "Ta main est complète : tu peux sortir sans piocher"
+              ? t("game.directReady")
               : state.phase === "drawing"
-                ? "Pioche une carte"
+                ? t("game.drawCard")
                 : canGoOut
-                  ? "Ta main est valide : tu peux sortir"
-                  : "Clique la carte que tu veux défausser"}
+                  ? t("game.ready")
+                  : t("game.selectDiscard")}
           </p>
         </div>
         {displayedMelds && (
           <div className="meld-summary">
-            <strong>Sortie prête</strong>
+            <strong>{t("game.goOutReady")}</strong>
             {displayedMelds.map((meld, index) => (
               <span key={`${meld.type}-${index}`}>
-                {meld.type === "book" ? "Livre" : "Suite"} · {meld.cardIds.length}
+                {t(meld.type === "book" ? "game.book" : "game.run")} · {meld.cardIds.length}
               </span>
             ))}
           </div>
@@ -562,7 +569,7 @@ function Game({
         </DndContext>
         <div className="turn-actions">
           <button className="secondary-button" disabled={!canDiscard || busy} onClick={() => selectedDiscardId && onDiscard(selectedDiscardId)}>
-            Défausser
+            {t("game.discard")}
           </button>
           <button
             className="primary-button"
@@ -572,7 +579,7 @@ function Game({
               else if (selectedDiscardId && discardMelds) onGoOut(discardMelds, selectedDiscardId);
             }}
           >
-            <Crown size={18} /> Sortir maintenant
+            <Crown size={18} /> {t("game.goOut")}
           </button>
         </div>
         {error && (
@@ -586,6 +593,7 @@ function Game({
 }
 
 export default function App() {
+  const { errorMessage } = useI18n();
   const [session, setSession] = useState<SessionData | null>(null);
   const [gameState, setGameState] = useState<ClientGameState | null>(null);
   const [error, setError] = useState("");
@@ -625,7 +633,7 @@ export default function App() {
     const result = await emitCommand<T>(event, payload);
     setBusy(false);
     if (!result.ok) {
-      setError(result.message);
+      setError(errorMessage(result.code, result.message));
       return;
     }
     onSuccess?.(result.data);
@@ -649,7 +657,7 @@ export default function App() {
     const result = await emitCommand("room:leave", {});
     setBusy(false);
     if (!result.ok && result.code !== "NOT_IN_ROOM") {
-      setError(result.message);
+      setError(errorMessage(result.code, result.message));
       return;
     }
     clearSession();
