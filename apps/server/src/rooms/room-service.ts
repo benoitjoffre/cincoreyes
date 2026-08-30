@@ -1,6 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import type { Card, ClientGameState, DrawSource, GamePhase, MeldSubmission, Rank, RevealedMeld, SessionData } from "@cincoreyes/contracts";
-import { createDeck, handScore, recycleDiscardPile, shuffle, validateMelds } from "@cincoreyes/game-engine";
+import { createDeck, deadwoodScore, recycleDiscardPile, shuffle, validateMelds } from "@cincoreyes/game-engine";
 
 interface PlayerState {
   id: string;
@@ -286,7 +286,7 @@ export class RoomService {
 
   private finishRound(room: RoomState): void {
     room.players.forEach((player) => {
-      player.score += handScore(player.hand, room.roundRank);
+      player.score += deadwoodScore(player.hand, room.roundRank);
     });
     if (room.roundRank === 13) {
       room.phase = "game-ended";

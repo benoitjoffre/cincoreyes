@@ -1,6 +1,6 @@
 import type { Card } from "@cincoreyes/contracts";
 import { describe, expect, it } from "vitest";
-import { createDeck, findValidMelds, handScore, isValidBook, isValidRun } from "./index.js";
+import { createDeck, deadwoodScore, findValidMelds, handScore, isValidBook, isValidRun } from "./index.js";
 
 function card(id: string, rank: Card["rank"], suit: Card["suit"]): Card {
   return { id, rank, suit };
@@ -27,6 +27,31 @@ describe("Five Kings rules", () => {
 
   it("scores jokers and round wild cards", () => {
     expect(handScore([card("joker", "joker", "joker"), card("wild", 7, "clubs"), card("natural", 10, "stars")], 7)).toBe(80);
+  });
+
+  it("scores only cards outside valid melds", () => {
+    const hand = [
+      card("jack-stars", 11, "stars"),
+      card("jack-hearts", 11, "hearts"),
+      card("jack-clubs", 11, "clubs"),
+      card("joker", "joker", "joker"),
+      card("five", 5, "diamonds"),
+    ];
+
+    expect(deadwoodScore(hand, 3)).toBe(5);
+  });
+
+  it("chooses the meld arrangement with the lowest remaining score", () => {
+    const hand = [
+      card("ten-stars", 10, "stars"),
+      card("ten-hearts", 10, "hearts"),
+      card("ten-clubs", 10, "clubs"),
+      card("jack-stars", 11, "stars"),
+      card("queen-stars", 12, "stars"),
+      card("joker", "joker", "joker"),
+    ];
+
+    expect(deadwoodScore(hand, 3)).toBe(0);
   });
 
   it("automatically finds a book after choosing the discard", () => {
