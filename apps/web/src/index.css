@@ -17,10 +17,14 @@
 * {
   box-sizing: border-box;
 }
+html,
 body {
   margin: 0;
+  width: 100%;
+  max-width: 100%;
   min-width: 320px;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 button,
 input {
@@ -40,5 +44,7 @@ p {
   margin-top: 0;
 }
 #root {
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
 }

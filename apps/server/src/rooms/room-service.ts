@@ -1,5 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { Card, ClientGameState, DrawSource, GamePhase, MeldSubmission, Rank, SessionData } from "@cincoreyes/contracts";
+import type { Card, ClientGameState, DrawSource, GamePhase, MeldSubmission, Rank, RevealedMeld, SessionData } from "@cincoreyes/contracts";
 import { createDeck, handScore, recycleDiscardPile, shuffle, validateMelds } from "@cincoreyes/game-engine";
 
 interface PlayerState {
@@ -25,6 +25,7 @@ interface RoomState {
   discardPile: Card[];
   wentOutPlayerId: string | null;
   finalTurnPlayerIds: Set<string>;
+  revealedPlayerMelds: Map<string, RevealedMeld[]>;
   processedActions: Set<string>;
   phaseBeforePause: Exclude<GamePhase, "paused"> | null;
 }
@@ -65,6 +66,7 @@ export class RoomService {
       discardPile: [],
       wentOutPlayerId: null,
       finalTurnPlayerIds: new Set(),
+      revealedPlayerMelds: new Map(),
       processedActions: new Set(),
       phaseBeforePause: null,
     };
@@ -137,17 +139,36 @@ export class RoomService {
     this.finishTurn(room, playerId);
   }
 
-  goOut(roomCode: string, playerId: string, actionId: string, melds: MeldSubmission[], discardCardId: string): void {
+  goOut(roomCode: string, playerId: string, actionId: string, melds: MeldSubmission[], discardCardId?: string): void {
     const room = this.getRoom(roomCode);
     this.acceptAction(room, actionId);
-    this.assertTurn(room, playerId, "discarding");
+    this.assertTurn(room, playerId, ["drawing", "discarding"]);
     const player = this.getPlayer(room, playerId);
-    const remainingHand = player.hand.filter((card) => card.id !== discardCardId);
-    if (remainingHand.length === player.hand.length) throw new GameError("CARD_NOT_FOUND", "Cette carte n’est pas dans votre main.");
+    if (room.phase === "discarding" && !discardCardId) {
+      throw new GameError("DISCARD_REQUIRED", "Choisissez une carte à défausser avant de sortir.");
+    }
+    if (room.phase === "drawing" && discardCardId) {
+      throw new GameError("INVALID_DISCARD", "Aucune défausse n’est nécessaire avant la pioche.");
+    }
+    const remainingHand = discardCardId ? player.hand.filter((card) => card.id !== discardCardId) : player.hand;
+    if (discardCardId && remainingHand.length === player.hand.length) {
+      throw new GameError("CARD_NOT_FOUND", "Cette carte n’est pas dans votre main.");
+    }
     if (!validateMelds(remainingHand, melds, room.roundRank)) {
       throw new GameError("INVALID_MELDS", "Les groupes ne couvrent pas une main valide.");
     }
-    this.removeAndDiscard(room, player, discardCardId);
+    const cardsById = new Map(remainingHand.map((card) => [card.id, card]));
+    room.revealedPlayerMelds.set(
+      playerId,
+      melds.map((meld) => ({
+        type: meld.type,
+        cards: meld.cardIds.flatMap((cardId) => {
+          const card = cardsById.get(cardId);
+          return card ? [card] : [];
+        }),
+      })),
+    );
+    if (discardCardId) this.removeAndDiscard(room, player, discardCardId);
     player.hand = [];
     if (!room.wentOutPlayerId) {
       room.wentOutPlayerId = playerId;
@@ -209,6 +230,10 @@ export class RoomService {
       hand: viewer.hand,
       wentOutPlayerId: room.wentOutPlayerId,
       finalTurnPlayerIds: [...room.finalTurnPlayerIds],
+      revealedPlayerMelds: [...room.revealedPlayerMelds].map(([revealedPlayerId, melds]) => ({
+        playerId: revealedPlayerId,
+        melds,
+      })),
     };
   }
 
@@ -242,6 +267,7 @@ export class RoomService {
     room.activeIndex = (room.dealerIndex + 1) % room.players.length;
     room.wentOutPlayerId = null;
     room.finalTurnPlayerIds.clear();
+    room.revealedPlayerMelds.clear();
     room.processedActions.clear();
     room.phase = "drawing";
     this.bump(room);
@@ -286,9 +312,10 @@ export class RoomService {
     room.discardPile = recycled.discardPile;
   }
 
-  private assertTurn(room: RoomState, playerId: string, expectedPhase: GamePhase): void {
+  private assertTurn(room: RoomState, playerId: string, expectedPhase: GamePhase | readonly GamePhase[]): void {
     if (room.phase === "paused") throw new GameError("GAME_PAUSED", "La partie attend un joueur déconnecté.");
-    if (room.phase !== expectedPhase) throw new GameError("INVALID_PHASE", "Cette action n’est pas disponible maintenant.");
+    const expectedPhases = Array.isArray(expectedPhase) ? expectedPhase : [expectedPhase];
+    if (!expectedPhases.includes(room.phase)) throw new GameError("INVALID_PHASE", "Cette action n’est pas disponible maintenant.");
     if (room.players[room.activeIndex]?.id !== playerId) throw new GameError("NOT_YOUR_TURN", "Ce n’est pas votre tour.");
   }
 

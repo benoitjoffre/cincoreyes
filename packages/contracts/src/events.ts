@@ -16,7 +16,7 @@ export interface ClientToServerEvents {
   "turn:draw": (payload: { actionId: string; source: DrawSource }, acknowledge: (result: CommandResult) => void) => void;
   "turn:discard": (payload: { actionId: string; cardId: string }, acknowledge: (result: CommandResult) => void) => void;
   "turn:go-out": (
-    payload: { actionId: string; melds: MeldSubmission[]; discardCardId: string },
+    payload: { actionId: string; melds: MeldSubmission[]; discardCardId?: string },
     acknowledge: (result: CommandResult) => void,
   ) => void;
 }

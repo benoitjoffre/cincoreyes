@@ -37,7 +37,7 @@ function Card({
   onClick?: () => void;
 }) {
   const isJoker = card.rank === "joker";
-  const label = isJoker ? "J" : card.rank === 11 ? "V" : card.rank === 12 ? "D" : card.rank === 13 ? "R" : card.rank;
+  const label = isJoker ? "JOKER" : card.rank === 11 ? "V" : card.rank === 12 ? "D" : card.rank === 13 ? "R" : card.rank;
   const symbol = isJoker ? "✦" : suitSymbols[card.suit as Suit];
   return (
     <button
@@ -240,7 +240,7 @@ function Game({
   error: string;
   onDraw: (source: "deck" | "discard") => void;
   onDiscard: (cardId: string) => void;
-  onGoOut: (melds: MeldSubmission[], discardCardId: string) => void;
+  onGoOut: (melds: MeldSubmission[], discardCardId?: string) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const isMyTurn = state.activePlayerId === playerId;
@@ -249,11 +249,25 @@ function Game({
   const visibleSelectedIds = selectedIds.filter((id) => handIds.has(id));
   const selectedDiscardId = visibleSelectedIds.length === 1 ? visibleSelectedIds[0] : undefined;
   const canDiscard = isMyTurn && state.phase === "discarding" && selectedDiscardId !== undefined;
+  const directMelds = state.phase === "drawing" ? findValidMelds(state.hand, state.roundRank) : null;
   const remainingHand = selectedDiscardId ? state.hand.filter(({ id }) => id !== selectedDiscardId) : [];
-  const suggestedMelds = selectedDiscardId ? findValidMelds(remainingHand, state.roundRank) : null;
-  const groupedIds = new Set(suggestedMelds?.flatMap(({ cardIds }) => cardIds) ?? []);
-  const canGoOut = canDiscard && suggestedMelds !== null;
+  const discardMelds = selectedDiscardId ? findValidMelds(remainingHand, state.roundRank) : null;
+  const displayedMelds = directMelds ?? discardMelds;
+  const groupedIds = new Set(displayedMelds?.flatMap(({ cardIds }) => cardIds) ?? []);
+  const orderedCardIds = displayedMelds?.flatMap(({ cardIds }) => cardIds) ?? [];
+  const cardsById = new Map(state.hand.map((card) => [card.id, card]));
+  const orderedHand = [
+    ...orderedCardIds.flatMap((cardId) => {
+      const card = cardsById.get(cardId);
+      return card ? [card] : [];
+    }),
+    ...state.hand.filter(({ id }) => !groupedIds.has(id)),
+  ];
+  const canGoOutDirectly = isMyTurn && state.phase === "drawing" && directMelds !== null;
+  const canGoOutAfterDiscard = canDiscard && discardMelds !== null;
+  const canGoOut = canGoOutDirectly || canGoOutAfterDiscard;
   const activePlayer = state.players.find(({ id }) => id === state.activePlayerId);
+  const wentOutPlayer = state.players.find(({ id }) => id === state.wentOutPlayerId);
   const toggleCard = (cardId: string) => {
     setSelectedIds((current) => (current.includes(cardId) ? [] : [cardId]));
   };
@@ -306,8 +320,41 @@ function Game({
       </section>
       <section className="table-center">
         <div className="turn-banner">
-          {state.phase === "paused" ? "Partie en pause" : isMyTurn ? "À toi de jouer" : `Tour de ${activePlayer?.name ?? "…"}`}
+          {state.phase === "paused"
+            ? "Partie en pause"
+            : wentOutPlayer
+              ? `${wentOutPlayer.name} est sorti${wentOutPlayer.id === playerId ? " · bravo !" : " ! Dernier tour"}`
+              : isMyTurn
+                ? "À toi de jouer"
+                : `Tour de ${activePlayer?.name ?? "…"}`}
         </div>
+        {state.revealedPlayerMelds.length > 0 && (
+          <div className="revealed-area" aria-live="polite">
+            {state.revealedPlayerMelds.map(({ playerId: revealedPlayerId, melds }) => {
+              const player = state.players.find(({ id }) => id === revealedPlayerId);
+              return (
+                <section className="revealed-player" key={revealedPlayerId}>
+                  <div className="revealed-title">
+                    <Crown size={17} />
+                    <strong>{player?.name ?? "Un joueur"} sort ses cartes</strong>
+                  </div>
+                  <div className="revealed-melds">
+                    {melds.map((meld, meldIndex) => (
+                      <div className="revealed-meld" key={`${revealedPlayerId}-${meld.type}-${meldIndex}`}>
+                        <small>{meld.type === "book" ? "Livre" : "Suite"}</small>
+                        <div>
+                          {meld.cards.map((card) => (
+                            <Card key={card.id} card={card} />
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              );
+            })}
+          </div>
+        )}
         <div className="piles">
           <button className="deck-pile" disabled={!canDraw || busy} onClick={() => onDraw("deck")} aria-label="Piocher">
             <Crown />
@@ -326,17 +373,19 @@ function Game({
             <strong>{state.hand.length} cartes</strong>
           </div>
           <p className={`turn-hint${canGoOut ? " ready" : ""}`}>
-            {state.phase === "drawing"
-              ? "Pioche une carte"
-              : canGoOut
-                ? "Ta main est valide : tu peux sortir"
-                : "Clique la carte que tu veux défausser"}
+            {canGoOutDirectly
+              ? "Ta main est complète : tu peux sortir sans piocher"
+              : state.phase === "drawing"
+                ? "Pioche une carte"
+                : canGoOut
+                  ? "Ta main est valide : tu peux sortir"
+                  : "Clique la carte que tu veux défausser"}
           </p>
         </div>
-        {suggestedMelds && (
+        {displayedMelds && (
           <div className="meld-summary">
             <strong>Sortie prête</strong>
-            {suggestedMelds.map((meld, index) => (
+            {displayedMelds.map((meld, index) => (
               <span key={`${meld.type}-${index}`}>
                 {meld.type === "book" ? "Livre" : "Suite"} · {meld.cardIds.length}
               </span>
@@ -344,13 +393,13 @@ function Game({
           </div>
         )}
         <div className="hand-cards">
-          {state.hand.map((card) => (
+          {orderedHand.map((card) => (
             <Card
               key={card.id}
               card={card}
               selected={visibleSelectedIds.includes(card.id)}
               grouped={groupedIds.has(card.id)}
-              onClick={() => toggleCard(card.id)}
+              onClick={state.phase === "discarding" ? () => toggleCard(card.id) : undefined}
             />
           ))}
         </div>
@@ -361,7 +410,10 @@ function Game({
           <button
             className="primary-button"
             disabled={!canGoOut || busy}
-            onClick={() => selectedDiscardId && suggestedMelds && onGoOut(suggestedMelds, selectedDiscardId)}
+            onClick={() => {
+              if (canGoOutDirectly && directMelds) onGoOut(directMelds);
+              else if (selectedDiscardId && discardMelds) onGoOut(discardMelds, selectedDiscardId);
+            }}
           >
             <Crown size={18} /> Sortir maintenant
           </button>

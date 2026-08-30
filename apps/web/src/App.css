@@ -274,11 +274,18 @@ input:focus {
   color: #6d7168;
 }
 .game-shell {
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
   color: #fff;
   background: #174535;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto auto minmax(270px, 1fr) auto;
+}
+.game-shell > * {
+  min-width: 0;
+  max-width: 100%;
 }
 .scoreboard {
   position: fixed;
@@ -395,6 +402,51 @@ input:focus {
   border: 1px solid rgba(255, 255, 255, 0.14);
   font-size: 13px;
 }
+.revealed-area {
+  width: min(760px, calc(100vw - 28px));
+  display: grid;
+  gap: 10px;
+}
+.revealed-player {
+  padding: 12px;
+  border: 1px solid rgba(246, 203, 100, 0.7);
+  background: rgba(17, 55, 43, 0.88);
+}
+.revealed-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 10px;
+  color: #f6cb64;
+}
+.revealed-melds {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+.revealed-meld {
+  flex: 0 0 auto;
+}
+.revealed-meld > small {
+  display: block;
+  margin-bottom: 6px;
+  color: rgba(255, 255, 255, 0.68);
+  text-transform: uppercase;
+  font-size: 10px;
+}
+.revealed-meld > div {
+  display: flex;
+  gap: 5px;
+}
+.revealed-meld .playing-card {
+  width: 62px;
+  flex-basis: 62px;
+  pointer-events: none;
+}
+.revealed-meld .card-symbol {
+  font-size: 23px;
+}
 .piles {
   display: flex;
   gap: 34px;
@@ -495,6 +547,10 @@ input:focus {
 }
 .suit-joker {
   color: #ad3a83;
+}
+.suit-joker .card-corner {
+  font-size: 9px;
+  line-height: 1;
 }
 .hand-zone {
   color: var(--ink);
@@ -679,12 +735,15 @@ input:focus {
     overflow-x: auto;
     justify-content: flex-start;
     padding: 10px;
+    align-items: flex-start;
   }
   .opponent {
+    flex: 0 0 145px;
     min-width: 145px;
   }
   .table-center {
-    min-height: 250px;
+    min-height: 230px;
+    padding: 14px 10px 20px;
   }
   .playing-card,
   .deck-pile {
@@ -701,6 +760,19 @@ input:focus {
     flex: 1;
   }
   .game-shell {
-    grid-template-rows: auto auto minmax(250px, 1fr) auto;
+    min-height: 100svh;
+    grid-template-rows: auto auto auto minmax(230px, 1fr) auto;
+    overflow-x: hidden;
+  }
+  .hand-zone {
+    width: 100%;
+    min-width: 0;
+    padding-right: 14px;
+    padding-left: 14px;
+  }
+  .hand-cards {
+    width: 100%;
+    min-width: 0;
+    overscroll-behavior-inline: contain;
   }
 }

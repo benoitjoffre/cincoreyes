@@ -91,7 +91,7 @@ export function registerHandlers(io: GameServer, socket: GameSocket, rooms: Room
   socket.on("turn:go-out", (payload, acknowledge) =>
     gameCommand(
       payload,
-      z.object({ actionId: actionSchema, melds: z.array(meldSchema).min(1), discardCardId: z.string() }),
+      z.object({ actionId: actionSchema, melds: z.array(meldSchema).min(1), discardCardId: z.string().optional() }),
       (identity, parsed) => rooms.goOut(identity.roomCode, identity.playerId, parsed.actionId, parsed.melds, parsed.discardCardId),
       acknowledge,
     ),

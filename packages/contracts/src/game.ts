@@ -19,6 +19,16 @@ export interface PublicPlayer {
   isHost: boolean;
 }
 
+export interface RevealedMeld {
+  type: "book" | "run";
+  cards: Card[];
+}
+
+export interface RevealedPlayerMelds {
+  playerId: string;
+  melds: RevealedMeld[];
+}
+
 export type GamePhase = "lobby" | "drawing" | "discarding" | "round-ended" | "game-ended" | "paused";
 
 export interface ClientGameState {
@@ -34,6 +44,7 @@ export interface ClientGameState {
   hand: Card[];
   wentOutPlayerId: string | null;
   finalTurnPlayerIds: string[];
+  revealedPlayerMelds: RevealedPlayerMelds[];
 }
 
 export interface MeldSubmission {
