@@ -622,6 +622,25 @@ input:focus {
   min-height: 155px;
   align-items: end;
 }
+.sortable-card {
+  flex: 0 0 88px;
+  line-height: 0;
+  touch-action: pan-y;
+  user-select: none;
+}
+.sortable-card.dragging {
+  z-index: 20;
+  opacity: 0.82;
+}
+.sortable-card.dragging .playing-card {
+  cursor: grabbing;
+  transform: translateY(-14px) rotate(2deg);
+  box-shadow: 0 18px 28px rgba(0, 0, 0, 0.3);
+}
+.sortable-card .playing-card {
+  cursor: grab;
+  touch-action: pan-y;
+}
 .turn-actions {
   display: flex;
   justify-content: flex-end;
@@ -750,6 +769,9 @@ input:focus {
     width: 72px;
     flex-basis: 72px;
   }
+  .sortable-card {
+    flex-basis: 72px;
+  }
   .hand-toolbar {
     align-items: flex-end;
   }
@@ -771,8 +793,18 @@ input:focus {
     padding-left: 14px;
   }
   .hand-cards {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 10px 6px;
     width: 100%;
     min-width: 0;
-    overscroll-behavior-inline: contain;
+    overflow-x: visible;
+    padding-right: 0;
+    padding-left: 0;
+    align-items: end;
+  }
+  .sortable-card {
+    width: 72px;
+    justify-self: center;
   }
 }

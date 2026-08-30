@@ -1,7 +1,10 @@
 import type { Card as CardModel, ClientGameState, CommandResult, MeldSubmission, SessionData, Suit } from "@cincoreyes/contracts";
 import { findValidMelds } from "@cincoreyes/game-engine";
+import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { Copy, Crown, LogIn, Plus, Sparkles, Trophy, Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ButtonHTMLAttributes } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
 
@@ -30,19 +33,25 @@ function Card({
   selected = false,
   grouped = false,
   onClick,
+  buttonRef,
+  dragProps,
 }: {
   card: CardModel;
   selected?: boolean;
   grouped?: boolean;
   onClick?: () => void;
+  buttonRef?: (node: HTMLButtonElement | null) => void;
+  dragProps?: ButtonHTMLAttributes<HTMLButtonElement>;
 }) {
   const isJoker = card.rank === "joker";
   const label = isJoker ? "JOKER" : card.rank === 11 ? "V" : card.rank === 12 ? "D" : card.rank === 13 ? "R" : card.rank;
   const symbol = isJoker ? "✦" : suitSymbols[card.suit as Suit];
   return (
     <button
+      ref={buttonRef}
       type="button"
       className={`playing-card suit-${card.suit}${selected ? " selected" : ""}${grouped ? " grouped" : ""}`}
+      {...dragProps}
       onClick={onClick}
       aria-pressed={selected}
       aria-label={isJoker ? "Joker" : `${label} ${card.suit}`}
@@ -59,6 +68,16 @@ function Card({
         <small>{symbol}</small>
       </span>
     </button>
+  );
+}
+
+function SortableHandCard({ card, selected, grouped, onClick }: { card: CardModel; selected: boolean; grouped: boolean; onClick?: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: card.id });
+
+  return (
+    <div className={`sortable-card${isDragging ? " dragging" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition }}>
+      <Card card={card} selected={selected} grouped={grouped} onClick={onClick} buttonRef={setNodeRef} dragProps={{ ...attributes, ...listeners }} />
+    </div>
   );
 }
 
@@ -243,6 +262,12 @@ function Game({
   onGoOut: (melds: MeldSubmission[], discardCardId?: string) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [customOrder, setCustomOrder] = useState<{ roundRank: number; cardIds: string[] } | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
   const isMyTurn = state.activePlayerId === playerId;
   const canDraw = isMyTurn && state.phase === "drawing";
   const handIds = new Set(state.hand.map(({ id }) => id));
@@ -254,15 +279,18 @@ function Game({
   const discardMelds = selectedDiscardId ? findValidMelds(remainingHand, state.roundRank) : null;
   const displayedMelds = directMelds ?? discardMelds;
   const groupedIds = new Set(displayedMelds?.flatMap(({ cardIds }) => cardIds) ?? []);
-  const orderedCardIds = displayedMelds?.flatMap(({ cardIds }) => cardIds) ?? [];
+  const groupedCardIds = displayedMelds?.flatMap(({ cardIds }) => cardIds) ?? [];
+  const suggestedCardIds = [...groupedCardIds, ...state.hand.filter(({ id }) => !groupedIds.has(id)).map(({ id }) => id)];
+  const customCardIds = customOrder?.roundRank === state.roundRank ? customOrder.cardIds : [];
+  const customCardIdSet = new Set(customCardIds);
+  const visibleCardOrder = customCardIds.length
+    ? [...customCardIds.filter((id) => handIds.has(id)), ...suggestedCardIds.filter((id) => !customCardIdSet.has(id))]
+    : suggestedCardIds;
   const cardsById = new Map(state.hand.map((card) => [card.id, card]));
-  const orderedHand = [
-    ...orderedCardIds.flatMap((cardId) => {
-      const card = cardsById.get(cardId);
-      return card ? [card] : [];
-    }),
-    ...state.hand.filter(({ id }) => !groupedIds.has(id)),
-  ];
+  const orderedHand = visibleCardOrder.flatMap((cardId) => {
+    const card = cardsById.get(cardId);
+    return card ? [card] : [];
+  });
   const canGoOutDirectly = isMyTurn && state.phase === "drawing" && directMelds !== null;
   const canGoOutAfterDiscard = canDiscard && discardMelds !== null;
   const canGoOut = canGoOutDirectly || canGoOutAfterDiscard;
@@ -270,6 +298,13 @@ function Game({
   const wentOutPlayer = state.players.find(({ id }) => id === state.wentOutPlayerId);
   const toggleCard = (cardId: string) => {
     setSelectedIds((current) => (current.includes(cardId) ? [] : [cardId]));
+  };
+  const reorderCards = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const oldIndex = visibleCardOrder.indexOf(String(active.id));
+    const newIndex = visibleCardOrder.indexOf(String(over.id));
+    if (oldIndex < 0 || newIndex < 0) return;
+    setCustomOrder({ roundRank: state.roundRank, cardIds: arrayMove(visibleCardOrder, oldIndex, newIndex) });
   };
   if (state.phase === "game-ended") {
     const ranking = [...state.players].sort((left, right) => left.score - right.score);
@@ -392,17 +427,21 @@ function Game({
             ))}
           </div>
         )}
-        <div className="hand-cards">
-          {orderedHand.map((card) => (
-            <Card
-              key={card.id}
-              card={card}
-              selected={visibleSelectedIds.includes(card.id)}
-              grouped={groupedIds.has(card.id)}
-              onClick={state.phase === "discarding" ? () => toggleCard(card.id) : undefined}
-            />
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={reorderCards}>
+          <SortableContext items={visibleCardOrder} strategy={rectSortingStrategy}>
+            <div className="hand-cards">
+              {orderedHand.map((card) => (
+                <SortableHandCard
+                  key={card.id}
+                  card={card}
+                  selected={visibleSelectedIds.includes(card.id)}
+                  grouped={groupedIds.has(card.id)}
+                  onClick={state.phase === "discarding" ? () => toggleCard(card.id) : undefined}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
         <div className="turn-actions">
           <button className="secondary-button" disabled={!canDiscard || busy} onClick={() => selectedDiscardId && onDiscard(selectedDiscardId)}>
             Défausser
