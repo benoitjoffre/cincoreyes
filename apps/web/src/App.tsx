@@ -47,7 +47,19 @@ function Card({
 }) {
   const { language, t } = useI18n();
   const isJoker = card.rank === "joker";
-  const label = isJoker ? "JOKER" : card.rank === 11 ? (language === "fr" ? "V" : "J") : card.rank === 12 ? (language === "fr" ? "D" : "Q") : "R";
+  const label = isJoker
+    ? "JOKER"
+    : card.rank === 11
+      ? language === "fr"
+        ? "V"
+        : "J"
+      : card.rank === 12
+        ? language === "fr"
+          ? "D"
+          : "Q"
+        : card.rank === 13
+          ? "R"
+          : card.rank;
   const symbol = isJoker ? "✦" : suitSymbols[card.suit as Suit];
   return (
     <button
