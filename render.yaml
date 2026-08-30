@@ -1,5 +1,23 @@
 services:
   - type: web
+    name: cinq-royaumes
+    runtime: static
+    buildCommand: pnpm --filter @cincoreyes/web build
+    staticPublishPath: ./apps/web/dist
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: VITE_SERVER_HOST
+        fromService:
+          type: web
+          name: cinq-royaumes-server
+          envVarKey: RENDER_EXTERNAL_HOSTNAME
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  - type: web
     name: cinq-royaumes-server
     runtime: node
     plan: free
@@ -9,5 +27,8 @@ services:
     envVars:
       - key: NODE_VERSION
         value: 22
-      - key: CLIENT_ORIGIN
-        sync: false
+      - key: CLIENT_HOST
+        fromService:
+          type: web
+          name: cinq-royaumes
+          envVarKey: RENDER_EXTERNAL_HOSTNAME

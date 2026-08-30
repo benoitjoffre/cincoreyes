@@ -20,29 +20,18 @@ pnpm dev
 
 Pour tester une partie, ouvre l’interface dans deux fenêtres privées distinctes. Crée une salle dans la première, puis rejoins son code dans la seconde.
 
-## Déploiement
+## Déploiement Render
 
-Netlify héberge l’interface React. Le serveur Socket.IO doit être hébergé séparément sur un service qui maintient les connexions WebSocket, par exemple Render. Les fonctions Netlify ne prennent pas en charge un serveur Socket.IO persistant.
+Le fichier `render.yaml` déploie toute l’application depuis un seul Blueprint Render :
 
-### 1. Backend Render
+- `cinq-royaumes` est le site statique React servi par le CDN Render ;
+- `cinq-royaumes-server` est le service Node.js qui maintient les connexions Socket.IO.
 
-Le fichier `render.yaml` décrit le service. Crée un Blueprint Render depuis ce dépôt et renseigne la variable d’environnement suivante :
+Dans le tableau de bord Render, crée un nouveau Blueprint depuis ce dépôt. Les variables `VITE_SERVER_HOST` et `CLIENT_HOST` sont alimentées automatiquement avec les hostnames publics des deux services. Aucune URL n’est à recopier manuellement.
 
-```text
-CLIENT_ORIGIN=https://ton-site.netlify.app
-```
+Une fois le déploiement terminé, ouvre l’URL du service `cinq-royaumes`. L’endpoint `/health` du service `cinq-royaumes-server` doit répondre avec `{"status":"ok"}`.
 
-Plusieurs origines peuvent être séparées par des virgules. Une fois le service déployé, vérifie `https://ton-backend.onrender.com/health`.
-
-### 2. Frontend Netlify
-
-Importe le dépôt dans Netlify. Le fichier `netlify.toml` fournit déjà la commande de build, le dossier publié et la redirection SPA. Ajoute cette variable d’environnement dans Netlify :
-
-```text
-VITE_SERVER_URL=https://ton-backend.onrender.com
-```
-
-Déclenche ensuite un nouveau déploiement. En local, cette variable est facultative : Vite continue à utiliser son proxy vers `http://localhost:3001`.
+En local, les variables de déploiement restent facultatives : Vite utilise son proxy vers `http://localhost:3001`.
 
 ## Vérification
 

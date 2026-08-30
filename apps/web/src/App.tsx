@@ -5,7 +5,9 @@ import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
 
-const serverUrl = import.meta.env.VITE_SERVER_URL?.trim();
+const configuredServerUrl = import.meta.env.VITE_SERVER_URL?.trim();
+const configuredServerHost = import.meta.env.VITE_SERVER_HOST?.trim();
+const serverUrl = configuredServerUrl || (configuredServerHost ? `https://${configuredServerHost}` : undefined);
 const socket = serverUrl ? io(serverUrl, { autoConnect: false }) : io({ autoConnect: false });
 const sessionStorageKey = "cinq-royaumes-session";
 const suitSymbols: Record<Suit, string> = {
