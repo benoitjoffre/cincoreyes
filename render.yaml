@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: cinq-royaumes-server
+    runtime: node
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm --filter @cincoreyes/server build
+    startCommand: pnpm --filter @cincoreyes/server start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: CLIENT_ORIGIN
+        sync: false
