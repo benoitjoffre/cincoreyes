@@ -3,8 +3,8 @@ import { findValidMelds } from "@cincoreyes/game-engine";
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Copy, Crown, LogIn, Plus, Sparkles, Trophy, Users } from "lucide-react";
-import { useEffect, useState, type ButtonHTMLAttributes } from "react";
+import { BookOpen, Check, Copy, Crown, LogIn, Plus, Share2, Sparkles, Trophy, Users, X } from "lucide-react";
+import { useEffect, useRef, useState, type ButtonHTMLAttributes } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
 
@@ -93,7 +93,8 @@ function Home({
   onJoin: (name: string, code: string) => void;
 }) {
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
+  const [code, setCode] = useState(() => new URLSearchParams(window.location.search).get("room")?.trim().toUpperCase().slice(0, 6) ?? "");
+  const rulesDialogRef = useRef<HTMLDialogElement>(null);
   return (
     <main className="home-shell">
       <section className="brand-panel">
@@ -156,8 +157,77 @@ function Home({
           <p className="privacy-note">
             <Users size={16} /> 2 à 7 joueurs, sans compte
           </p>
+          <button className="rules-button" type="button" onClick={() => rulesDialogRef.current?.showModal()}>
+            <BookOpen size={18} /> Règles du jeu
+          </button>
         </div>
       </section>
+      <dialog
+        className="rules-dialog"
+        ref={rulesDialogRef}
+        aria-labelledby="rules-title"
+        onKeyDown={(event) => {
+          if (event.key === "Escape") rulesDialogRef.current?.close();
+        }}
+      >
+        <div className="rules-header">
+          <div>
+            <p className="eyebrow">Cinq Royaumes</p>
+            <h2 id="rules-title">Règles du jeu</h2>
+          </div>
+          <button className="rules-close" type="button" onClick={() => rulesDialogRef.current?.close()} aria-label="Fermer les règles">
+            <X />
+          </button>
+        </div>
+        <div className="rules-content">
+          <section>
+            <h3>But du jeu</h3>
+            <p>
+              Former des livres et des suites pour conserver le moins de points possible. Après les onze manches, le joueur au score total le plus bas
+              gagne.
+            </p>
+          </section>
+          <section>
+            <h3>Les onze manches</h3>
+            <p>
+              La première manche se joue avec 3 cartes et les 3 sont folles. Chaque manche ajoute une carte et avance la valeur folle, jusqu’à la
+              dernière manche avec 13 cartes et les Rois fous.
+            </p>
+          </section>
+          <section>
+            <h3>À ton tour</h3>
+            <ol>
+              <li>Pioche la première carte de la pioche ou de la défausse.</li>
+              <li>Réorganise ta main pour préparer tes combinaisons.</li>
+              <li>Défausse une carte pour terminer ton tour.</li>
+            </ol>
+          </section>
+          <section>
+            <h3>Combinaisons valides</h3>
+            <p>
+              <strong>Livre :</strong> au moins 3 cartes de même valeur, quelles que soient leurs couleurs.
+            </p>
+            <p>
+              <strong>Suite :</strong> au moins 3 cartes consécutives de la même couleur.
+            </p>
+            <p>Les Jokers et toutes les cartes de la valeur folle de la manche peuvent remplacer une carte manquante.</p>
+          </section>
+          <section>
+            <h3>Sortir</h3>
+            <p>
+              Si toute ta main forme des combinaisons, tu peux sortir immédiatement sans piocher. Après une pioche, tu peux aussi sortir en
+              choisissant une carte à défausser. Les autres joueurs jouent alors un dernier tour.
+            </p>
+          </section>
+          <section>
+            <h3>Calcul des points</h3>
+            <p>
+              Les cartes placées dans des combinaisons valent 0. Seules les cartes restantes sont comptées : leur valeur faciale, 11 pour un Valet, 12
+              pour une Dame, 13 pour un Roi, 20 pour une carte folle et 50 pour un Joker.
+            </p>
+          </section>
+        </div>
+      </dialog>
     </main>
   );
 }
@@ -176,6 +246,31 @@ function Lobby({
   onStart: () => void;
 }) {
   const me = state.players.find(({ id }) => id === playerId);
+  const [shareStatus, setShareStatus] = useState<"idle" | "copied">("idle");
+  const shareRoom = async () => {
+    const invitationUrl = new URL(window.location.href);
+    invitationUrl.search = "";
+    invitationUrl.hash = "";
+    invitationUrl.searchParams.set("room", state.roomCode);
+    const shareData = {
+      title: "Cinq Royaumes",
+      text: `Rejoins ma partie de Cinq Royaumes avec le code ${state.roomCode}.`,
+      url: invitationUrl.toString(),
+    };
+
+    if (navigator.share) {
+      try {
+        await navigator.share(shareData);
+        return;
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+      }
+    }
+
+    await navigator.clipboard.writeText(invitationUrl.toString());
+    setShareStatus("copied");
+    window.setTimeout(() => setShareStatus("idle"), 2500);
+  };
   return (
     <main className="lobby-shell">
       <header className="topbar">
@@ -191,6 +286,15 @@ function Lobby({
           <span>{state.roomCode}</span>
           <Copy size={20} />
         </button>
+        <div className="invite-actions">
+          <button className="secondary-button share-button" type="button" onClick={shareRoom}>
+            {shareStatus === "copied" ? <Check size={18} /> : <Share2 size={18} />}
+            {shareStatus === "copied" ? "Lien copié" : "Partager la partie"}
+          </button>
+          <span className="share-status" aria-live="polite">
+            {shareStatus === "copied" ? "Le lien d’invitation est copié." : ""}
+          </span>
+        </div>
         <div className="player-list">
           {state.players.map((player, index) => (
             <div className="player-row" key={player.id}>
@@ -523,7 +627,7 @@ export default function App() {
     );
   return (
     <Game
-      key={`${gameState.roundRank}:${gameState.activePlayerId}:${gameState.phase}`}
+      key={`${gameState.roomCode}:${gameState.roundRank}`}
       state={gameState}
       playerId={session.playerId}
       busy={busy}
