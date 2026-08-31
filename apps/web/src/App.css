@@ -415,6 +415,29 @@ input:focus {
   color: #73776e;
   font-size: 12px;
 }
+.disconnected-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.kick-button {
+  width: 31px;
+  height: 31px;
+  flex: 0 0 31px;
+  display: grid;
+  place-items: center;
+  border: 1px solid #d89086;
+  border-radius: 3px;
+  background: transparent;
+  color: #a72d22;
+}
+.kick-button:hover:not(:disabled) {
+  background: #fae6e1;
+}
+.kick-button:disabled {
+  opacity: 0.42;
+}
 .player-avatar {
   width: 40px;
   height: 40px;
@@ -548,6 +571,13 @@ input:focus {
 .opponent div {
   display: flex;
   flex-direction: column;
+}
+.opponent .disconnected-control {
+  margin-left: auto;
+}
+.opponent .kick-button {
+  color: #ffc3b8;
+  border-color: rgba(255, 195, 184, 0.55);
 }
 .opponent small {
   color: rgba(255, 255, 255, 0.65);

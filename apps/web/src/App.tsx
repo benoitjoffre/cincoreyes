@@ -1,9 +1,18 @@
-import type { Card as CardModel, ClientGameState, CommandResult, MeldSubmission, SessionData, Suit } from "@cincoreyes/contracts";
+import {
+  disconnectedPlayerKickDelayMs,
+  type Card as CardModel,
+  type ClientGameState,
+  type CommandResult,
+  type MeldSubmission,
+  type PublicPlayer,
+  type SessionData,
+  type Suit,
+} from "@cincoreyes/contracts";
 import { findValidMelds } from "@cincoreyes/game-engine";
 import { DndContext, KeyboardSensor, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
 import { SortableContext, arrayMove, rectSortingStrategy, sortableKeyboardCoordinates, useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { BookOpen, Check, Copy, Crown, LogIn, LogOut, Plus, Share2, Sparkles, Trophy, Users, X } from "lucide-react";
+import { BookOpen, Check, Copy, Crown, LogIn, LogOut, Plus, Share2, Sparkles, Trophy, UserX, Users, X } from "lucide-react";
 import { useEffect, useRef, useState, type ButtonHTMLAttributes } from "react";
 import { io } from "socket.io-client";
 import "./App.css";
@@ -92,6 +101,46 @@ function SortableHandCard({ card, selected, grouped, onClick }: { card: CardMode
   return (
     <div className={`sortable-card${isDragging ? " dragging" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition }}>
       <Card card={card} selected={selected} grouped={grouped} onClick={onClick} buttonRef={setNodeRef} dragProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
+
+function DisconnectedPlayerControl({
+  player,
+  canKick,
+  busy,
+  onKick,
+}: {
+  player: PublicPlayer;
+  canKick: boolean;
+  busy: boolean;
+  onKick: (playerId: string) => void;
+}) {
+  const { t } = useI18n();
+  const [now, setNow] = useState(player.disconnectedAt ?? 0);
+  useEffect(() => {
+    if (player.disconnectedAt === null) return;
+    const interval = window.setInterval(() => setNow(Date.now()), 1_000);
+    return () => window.clearInterval(interval);
+  }, [player.disconnectedAt]);
+  if (player.disconnectedAt === null) return null;
+  const remainingSeconds = Math.max(0, Math.ceil((player.disconnectedAt + disconnectedPlayerKickDelayMs - now) / 1_000));
+
+  return (
+    <div className="disconnected-control">
+      <span className="offline-dot">{t("player.awayCountdown", { seconds: remainingSeconds })}</span>
+      {canKick && (
+        <button
+          className="kick-button"
+          type="button"
+          disabled={busy || remainingSeconds > 0}
+          onClick={() => onKick(player.id)}
+          title={remainingSeconds > 0 ? t("player.kickCountdown", { seconds: remainingSeconds }) : t("player.kick", { name: player.name })}
+          aria-label={remainingSeconds > 0 ? t("player.kickCountdown", { seconds: remainingSeconds }) : t("player.kick", { name: player.name })}
+        >
+          <UserX size={15} />
+        </button>
+      )}
     </div>
   );
 }
@@ -247,6 +296,7 @@ function Lobby({
   error,
   onStart,
   onLeave,
+  onKick,
 }: {
   state: ClientGameState;
   playerId: string;
@@ -254,6 +304,7 @@ function Lobby({
   error: string;
   onStart: () => void;
   onLeave: () => void;
+  onKick: (playerId: string) => void;
 }) {
   const { t } = useI18n();
   const me = state.players.find(({ id }) => id === playerId);
@@ -320,7 +371,11 @@ function Lobby({
                 {player.name}
                 {player.id === playerId ? ` (${t("lobby.you")})` : ""}
               </strong>
-              <span className="player-status">{player.isHost ? t("lobby.host") : t("lobby.ready")}</span>
+              {player.connected ? (
+                <span className="player-status">{player.isHost ? t("lobby.host") : t("lobby.ready")}</span>
+              ) : (
+                <DisconnectedPlayerControl player={player} canKick={me?.isHost === true} busy={busy} onKick={onKick} />
+              )}
             </div>
           ))}
           {state.players.length < 7 && <div className="empty-seat">{t("lobby.waitingPlayer")}</div>}
@@ -374,6 +429,7 @@ function Game({
   onDiscard,
   onGoOut,
   onLeave,
+  onKick,
 }: {
   state: ClientGameState;
   playerId: string;
@@ -383,6 +439,7 @@ function Game({
   onDiscard: (cardId: string) => void;
   onGoOut: (melds: MeldSubmission[], discardCardId?: string) => void;
   onLeave: () => void;
+  onKick: (playerId: string) => void;
 }) {
   const { t } = useI18n();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -420,6 +477,7 @@ function Game({
   const canGoOut = canGoOutDirectly || canGoOutAfterDiscard;
   const activePlayer = state.players.find(({ id }) => id === state.activePlayerId);
   const wentOutPlayer = state.players.find(({ id }) => id === state.wentOutPlayerId);
+  const me = state.players.find(({ id }) => id === playerId);
   const toggleCard = (cardId: string) => {
     setSelectedIds((current) => (current.includes(cardId) ? [] : [cardId]));
   };
@@ -482,7 +540,7 @@ function Game({
                   {t("game.points", { count: player.score })} · {t("game.cards", { count: player.cardCount })}
                 </small>
               </div>
-              {!player.connected && <span className="offline-dot">{t("game.away")}</span>}
+              {!player.connected && <DisconnectedPlayerControl player={player} canKick={me?.isHost === true} busy={busy} onKick={onKick} />}
             </div>
           ))}
       </section>
@@ -628,7 +686,11 @@ export default function App() {
         sessionToken: previous.sessionToken,
       });
       if (result.ok) setSession(result.data);
-      else localStorage.removeItem(sessionStorageKey);
+      else {
+        localStorage.removeItem(sessionStorageKey);
+        setSession(null);
+        setGameState(null);
+      }
     };
     socket.on("game:state", handleState);
     socket.on("connect", handleConnect);
@@ -692,6 +754,7 @@ export default function App() {
         error={error}
         onStart={() => run("game:start", { actionId: actionId() })}
         onLeave={leaveRoom}
+        onKick={(playerId) => run("room:kick", { playerId })}
       />
     );
   return (
@@ -705,6 +768,7 @@ export default function App() {
       onDiscard={(cardId) => run("turn:discard", { actionId: actionId(), cardId })}
       onGoOut={(melds, discardCardId) => run("turn:go-out", { actionId: actionId(), melds, discardCardId })}
       onLeave={leaveRoom}
+      onKick={(playerId) => run("room:kick", { playerId })}
     />
   );
 }

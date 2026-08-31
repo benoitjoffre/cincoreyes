@@ -74,6 +74,14 @@ export function registerHandlers(io: GameServer, socket: GameSocket, rooms: Room
       acknowledge(failure(error));
     }
   });
+  socket.on("room:kick", (payload, acknowledge) =>
+    gameCommand(
+      payload,
+      z.object({ playerId: z.string().uuid() }),
+      (identity, parsed) => rooms.kick(identity.roomCode, identity.playerId, parsed.playerId),
+      acknowledge,
+    ),
+  );
   socket.on("game:start", (payload, acknowledge) =>
     gameCommand(
       payload,

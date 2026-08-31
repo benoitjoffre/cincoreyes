@@ -13,6 +13,7 @@ export interface ClientToServerEvents {
   "room:join": (payload: { roomCode: string; playerName: string }, acknowledge: (result: CommandResult<SessionData>) => void) => void;
   "room:resume": (payload: { sessionToken: string }, acknowledge: (result: CommandResult<SessionData>) => void) => void;
   "room:leave": (payload: Record<string, never>, acknowledge: (result: CommandResult) => void) => void;
+  "room:kick": (payload: { playerId: string }, acknowledge: (result: CommandResult) => void) => void;
   "game:start": (payload: { actionId: string }, acknowledge: (result: CommandResult) => void) => void;
   "turn:draw": (payload: { actionId: string; source: DrawSource }, acknowledge: (result: CommandResult) => void) => void;
   "turn:discard": (payload: { actionId: string; cardId: string }, acknowledge: (result: CommandResult) => void) => void;

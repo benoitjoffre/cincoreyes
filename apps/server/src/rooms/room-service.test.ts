@@ -10,6 +10,45 @@ interface MutableTestRoom {
 }
 
 describe("RoomService revealed melds", () => {
+  it("lets only the host kick a player disconnected for at least one minute", () => {
+    let now = 1_000;
+    const service = new RoomService(() => now);
+    const host = service.create("Alice", "host-socket");
+    const guest = service.join(host.roomCode, "Bob", "guest-socket");
+    const third = service.join(host.roomCode, "Chloe", "third-socket");
+
+    service.disconnect("guest-socket");
+    expect(service.view(host.roomCode, host.playerId).players.find(({ id }) => id === guest.playerId)?.disconnectedAt).toBe(now);
+    expect(() => service.kick(host.roomCode, third.playerId, guest.playerId)).toThrow("Seul l’hôte");
+    expect(() => service.kick(host.roomCode, host.playerId, guest.playerId)).toThrow("peut encore rejoindre");
+
+    now += 60_000;
+    service.kick(host.roomCode, host.playerId, guest.playerId);
+
+    expect(service.view(host.roomCode, host.playerId).players.map(({ id }) => id)).not.toContain(guest.playerId);
+    expect(() => service.resume(guest.sessionToken, "returning-socket")).toThrow("Cette session n’existe plus.");
+  });
+
+  it("resumes the game on the next player after the disconnected active player is kicked", () => {
+    let now = 1_000;
+    const service = new RoomService(() => now);
+    const host = service.create("Alice", "host-socket");
+    const guest = service.join(host.roomCode, "Bob", "guest-socket");
+    service.join(host.roomCode, "Chloe", "third-socket");
+    service.start(host.roomCode, host.playerId, crypto.randomUUID());
+    expect(service.view(host.roomCode, host.playerId).activePlayerId).toBe(guest.playerId);
+
+    service.disconnect("guest-socket");
+    expect(service.view(host.roomCode, host.playerId).phase).toBe("paused");
+    now += 60_000;
+    service.kick(host.roomCode, host.playerId, guest.playerId);
+
+    const resumed = service.view(host.roomCode, host.playerId);
+    expect(resumed.phase).toBe("drawing");
+    expect(resumed.activePlayerId).not.toBe(guest.playerId);
+    expect(resumed.players).toHaveLength(2);
+  });
+
   it("removes a player who leaves and transfers the host role", () => {
     const service = new RoomService();
     const host = service.create("Alice", "host-socket");

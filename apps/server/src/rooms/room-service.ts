@@ -1,5 +1,15 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { Card, ClientGameState, DrawSource, GamePhase, MeldSubmission, Rank, RevealedMeld, SessionData } from "@cincoreyes/contracts";
+import {
+  disconnectedPlayerKickDelayMs,
+  type Card,
+  type ClientGameState,
+  type DrawSource,
+  type GamePhase,
+  type MeldSubmission,
+  type Rank,
+  type RevealedMeld,
+  type SessionData,
+} from "@cincoreyes/contracts";
 import { createDeck, deadwoodScore, recycleDiscardPile, shuffle, validateMelds } from "@cincoreyes/game-engine";
 
 interface PlayerState {
@@ -8,6 +18,7 @@ interface PlayerState {
   sessionToken: string;
   socketId: string | null;
   connected: boolean;
+  disconnectedAt: number | null;
   isHost: boolean;
   score: number;
   hand: Card[];
@@ -49,6 +60,8 @@ function createRoomCode(): string {
 export class RoomService {
   private readonly rooms = new Map<string, RoomState>();
   private readonly sessions = new Map<string, { roomCode: string; playerId: string }>();
+
+  constructor(private readonly now: () => number = Date.now) {}
 
   create(playerName: string, socketId: string): SessionData {
     let code = createRoomCode();
@@ -96,6 +109,7 @@ export class RoomService {
     const player = this.getPlayer(room, session.playerId);
     player.socketId = socketId;
     player.connected = true;
+    player.disconnectedAt = null;
     if (room.phase === "paused") room.phase = room.phaseBeforePause ?? "drawing";
     room.phaseBeforePause = null;
     this.bump(room);
@@ -107,34 +121,24 @@ export class RoomService {
     if (!identity) throw new GameError("NOT_IN_ROOM", "Vous n’êtes pas dans une salle.");
     const room = this.getRoom(identity.roomCode);
     const playerIndex = room.players.findIndex(({ id }) => id === identity.playerId);
-    const player = room.players[playerIndex];
-    if (!player) throw new GameError("PLAYER_NOT_FOUND", "Joueur introuvable.");
-    const wasActivePlayer = playerIndex === room.activeIndex;
+    return this.removePlayer(room, playerIndex);
+  }
 
-    this.sessions.delete(player.sessionToken);
-    room.players.splice(playerIndex, 1);
-    room.finalTurnPlayerIds.delete(player.id);
-
-    if (room.players.length === 0) {
-      this.rooms.delete(room.code);
-      return null;
+  kick(roomCode: string, hostPlayerId: string, targetPlayerId: string): void {
+    const room = this.getRoom(roomCode);
+    const host = this.getPlayer(room, hostPlayerId);
+    if (!host.isHost) throw new GameError("KICK_HOST_ONLY", "Seul l’hôte peut exclure un joueur.");
+    if (hostPlayerId === targetPlayerId) throw new GameError("CANNOT_KICK_SELF", "Vous ne pouvez pas vous exclure vous-même.");
+    const targetIndex = room.players.findIndex(({ id }) => id === targetPlayerId);
+    const target = room.players[targetIndex];
+    if (!target) throw new GameError("PLAYER_NOT_FOUND", "Joueur introuvable.");
+    if (target.connected || target.disconnectedAt === null) {
+      throw new GameError("PLAYER_CONNECTED", "Ce joueur est actuellement connecté.");
     }
-
-    if (player.isHost) room.players[0]!.isHost = true;
-    room.activeIndex = this.adjustIndexAfterRemoval(room.activeIndex, playerIndex, room.players.length);
-    room.dealerIndex = this.adjustIndexAfterRemoval(room.dealerIndex, playerIndex, room.players.length);
-
-    if (room.phase !== "lobby" && room.phase !== "game-ended") {
-      if (room.players.length < 2) {
-        room.phase = "game-ended";
-      } else if (wasActivePlayer || player.id === room.wentOutPlayerId) {
-        room.phase = "drawing";
-      }
-      if (room.players.length >= 2 && room.wentOutPlayerId && room.finalTurnPlayerIds.size === 0) this.finishRound(room);
+    if (this.now() - target.disconnectedAt < disconnectedPlayerKickDelayMs) {
+      throw new GameError("KICK_TOO_EARLY", "Ce joueur peut encore rejoindre la partie.");
     }
-
-    this.bump(room);
-    return room.code;
+    this.removePlayer(room, targetIndex);
   }
 
   start(roomCode: string, playerId: string, actionId: string): void {
@@ -220,6 +224,7 @@ export class RoomService {
       if (!player) continue;
       player.connected = false;
       player.socketId = null;
+      player.disconnectedAt = this.now();
       if (room.phase !== "lobby" && room.phase !== "game-ended" && room.phase !== "paused") {
         room.phaseBeforePause = room.phase;
         room.phase = "paused";
@@ -256,6 +261,7 @@ export class RoomService {
         score: player.score,
         cardCount: player.hand.length,
         connected: player.connected,
+        disconnectedAt: player.disconnectedAt,
         isHost: player.isHost,
       })),
       activePlayerId: room.phase === "lobby" ? null : (room.players[room.activeIndex]?.id ?? null),
@@ -279,6 +285,7 @@ export class RoomService {
       sessionToken: randomBytes(32).toString("base64url"),
       socketId,
       connected: true,
+      disconnectedAt: null,
       isHost,
       score: 0,
       hand: [],
@@ -376,6 +383,47 @@ export class RoomService {
     if (currentIndex > removedIndex) return currentIndex - 1;
     if (currentIndex >= remainingCount) return 0;
     return currentIndex;
+  }
+
+  private removePlayer(room: RoomState, playerIndex: number): string | null {
+    const player = room.players[playerIndex];
+    if (!player) throw new GameError("PLAYER_NOT_FOUND", "Joueur introuvable.");
+    const wasActivePlayer = playerIndex === room.activeIndex;
+
+    this.sessions.delete(player.sessionToken);
+    room.players.splice(playerIndex, 1);
+    room.finalTurnPlayerIds.delete(player.id);
+
+    if (room.players.length === 0) {
+      this.rooms.delete(room.code);
+      return null;
+    }
+
+    if (player.isHost) room.players[0]!.isHost = true;
+    room.activeIndex = this.adjustIndexAfterRemoval(room.activeIndex, playerIndex, room.players.length);
+    room.dealerIndex = this.adjustIndexAfterRemoval(room.dealerIndex, playerIndex, room.players.length);
+
+    if (room.phase !== "lobby" && room.phase !== "game-ended") {
+      if (room.players.length < 2) {
+        room.phase = "game-ended";
+        room.phaseBeforePause = null;
+      } else {
+        const stillPaused = room.players.some(({ connected }) => !connected);
+        if (wasActivePlayer || player.id === room.wentOutPlayerId) room.phaseBeforePause = "drawing";
+        if (stillPaused) {
+          room.phase = "paused";
+        } else if (room.phase === "paused") {
+          room.phase = room.phaseBeforePause ?? "drawing";
+          room.phaseBeforePause = null;
+        }
+      }
+      if (room.phase !== "paused" && room.players.length >= 2 && room.wentOutPlayerId && room.finalTurnPlayerIds.size === 0) {
+        this.finishRound(room);
+      }
+    }
+
+    this.bump(room);
+    return room.code;
   }
 
   private bump(room: RoomState): void {
