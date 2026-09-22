@@ -143,7 +143,6 @@ function EmojiPicker({
         aria-label={`Choisir un emoji pour ${player.name}`}
       >
         <span>⚡</span>
-        <small>React</small>
       </button>
 
       {open && (
