@@ -119,9 +119,29 @@ function EmojiPicker({
   const emojiOptions = ["🙂", "😄", "😂", "😍", "🔥", "👏", "💩", "🖕", "😡", "💀"];
   const latest = reactions.at(-1);
 
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    const onPointerDown = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      const picker = document.querySelector(`.emoji-picker[data-player-id="${player.id}"]`);
+      if (!picker || !target || picker.contains(target)) return;
+      close();
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [open, player.id]);
+
   return (
-    <div className="emoji-picker">
-      <button type="button" className="emoji-trigger" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-label={`Choisir un emoji pour ${player.name}`}>
+    <div className="emoji-picker" data-player-id={player.id}>
+      <button
+        type="button"
+        className="emoji-trigger"
+        onClick={() => setOpen((current) => !current)}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-label={`Choisir un emoji pour ${player.name}`}
+      >
         <span>⚡</span>
         <small>React</small>
       </button>
@@ -146,7 +166,11 @@ function EmojiPicker({
         </div>
       )}
 
-      {latest && <span className="reaction-bubble" aria-live="polite">{latest.emoji}</span>}
+      {latest && (
+        <span className="reaction-bubble" aria-live="polite">
+          {latest.emoji}
+        </span>
+      )}
     </div>
   );
 }
@@ -535,7 +559,7 @@ function Game({
   useEffect(() => {
     if (!latestReaction) return;
     setActiveReaction(latestReaction);
-    const timeout = window.setTimeout(() => setActiveReaction(null), 1450);
+    const timeout = window.setTimeout(() => setActiveReaction(null), 2200);
     return () => window.clearTimeout(timeout);
   }, [latestReaction?.id]);
 

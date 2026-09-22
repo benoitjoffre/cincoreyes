@@ -467,7 +467,10 @@ input:focus {
   background: rgba(17, 55, 43, 0.3);
   color: #fff;
   cursor: pointer;
-  transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    background 0.18s ease;
 }
 
 .emoji-trigger:hover {
@@ -491,7 +494,7 @@ input:focus {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
-  width: min(260px, 50vw);
+  width: min(280px, 52vw);
   padding: 10px;
   border: 1px solid rgba(255, 255, 255, 0.22);
   border-radius: 18px;
@@ -511,7 +514,11 @@ input:focus {
   font-size: 22px;
   cursor: pointer;
   position: relative;
-  transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
   animation: pop-in 0.2s ease-out;
 }
 
@@ -677,6 +684,46 @@ input:focus {
   100% {
     opacity: 0;
     transform: scale(1.32) translateY(-18px);
+  }
+}
+
+@media (max-width: 640px) {
+  .emoji-picker {
+    position: static;
+  }
+
+  .emoji-menu {
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    width: auto;
+    z-index: 50;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .emoji-button {
+    width: 100%;
+    min-height: 46px;
+    font-size: 24px;
+  }
+
+  .reaction-hit {
+    gap: 8px;
+    padding: 12px 14px;
+    max-width: min(90vw, 420px);
+  }
+
+  .reaction-hit__badge {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+  }
+
+  .reaction-hit__emoji {
+    width: 72px;
+    height: 72px;
+    font-size: 46px;
   }
 }
 
