@@ -115,24 +115,38 @@ function EmojiPicker({
   reactions: Reaction[];
   onSendEmoji: (targetPlayerId: string, emoji: string) => void;
 }) {
-  const emojiOptions = ["🙂", "😄", "😂", "😍", "🔥", "👏", "💩", "🖕"];
+  const [open, setOpen] = useState(false);
+  const emojiOptions = ["🙂", "😄", "😂", "😍", "🔥", "👏", "💩", "🖕", "😡", "💀"];
+  const latest = reactions.at(-1);
+
   return (
     <div className="emoji-picker">
-      <div className="emoji-buttons">
-        {emojiOptions.map((emoji) => (
-          <button
-            key={`${player.id}-${emoji}`}
-            type="button"
-            className="emoji-button"
-            aria-label={`Envoyer ${emoji} à ${player.name}`}
-            title={`Envoyer ${emoji} à ${player.name}`}
-            onClick={() => onSendEmoji(player.id, emoji)}
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
-      {reactions.length > 0 && <span className="reaction-bubble">{reactions[reactions.length - 1].emoji}</span>}
+      <button type="button" className="emoji-trigger" onClick={() => setOpen((current) => !current)} aria-expanded={open} aria-label={`Choisir un emoji pour ${player.name}`}>
+        <span>⚡</span>
+        <small>React</small>
+      </button>
+
+      {open && (
+        <div className="emoji-menu" role="dialog" aria-label={`Émoticônes pour ${player.name}`}>
+          {emojiOptions.map((emoji) => (
+            <button
+              key={`${player.id}-${emoji}`}
+              type="button"
+              className="emoji-button"
+              aria-label={`Envoyer ${emoji} à ${player.name}`}
+              title={`Envoyer ${emoji} à ${player.name}`}
+              onClick={() => {
+                onSendEmoji(player.id, emoji);
+                setOpen(false);
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {latest && <span className="reaction-bubble" aria-live="polite">{latest.emoji}</span>}
     </div>
   );
 }
@@ -478,6 +492,7 @@ function Game({
   const { t } = useI18n();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [customOrder, setCustomOrder] = useState<{ roundRank: number; cardIds: string[] } | null>(null);
+  const [activeReaction, setActiveReaction] = useState<Reaction | null>(null);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
@@ -512,6 +527,18 @@ function Game({
   const activePlayer = state.players.find(({ id }) => id === state.activePlayerId);
   const wentOutPlayer = state.players.find(({ id }) => id === state.wentOutPlayerId);
   const me = state.players.find(({ id }) => id === playerId);
+  const latestReaction = state.reactions.at(-1) ?? null;
+  const reactionSource = latestReaction ? state.players.find(({ id }) => id === latestReaction.fromPlayerId) : null;
+  const reactionTarget = latestReaction ? state.players.find(({ id }) => id === latestReaction.toPlayerId) : null;
+  const isToxicReaction = latestReaction ? ["💩", "🖕", "😡"].includes(latestReaction.emoji) : false;
+
+  useEffect(() => {
+    if (!latestReaction) return;
+    setActiveReaction(latestReaction);
+    const timeout = window.setTimeout(() => setActiveReaction(null), 1450);
+    return () => window.clearTimeout(timeout);
+  }, [latestReaction?.id]);
+
   const toggleCard = (cardId: string) => {
     setSelectedIds((current) => (current.includes(cardId) ? [] : [cardId]));
   };
@@ -544,6 +571,17 @@ function Game({
   }
   return (
     <main className="game-shell">
+      {activeReaction && reactionTarget && (
+        <div className={`reaction-overlay${isToxicReaction ? " reaction-overlay--toxic" : ""}`} aria-live="polite">
+          <div className="reaction-overlay__flash" />
+          <div className="reaction-hit">
+            <span className="reaction-hit__badge">{reactionSource?.name ?? "Joueur"}</span>
+            <span className="reaction-hit__emoji">{activeReaction.emoji}</span>
+            <span className="reaction-hit__badge reaction-hit__badge--target">{reactionTarget.name}</span>
+          </div>
+        </div>
+      )}
+
       <Scoreboard state={state} playerId={playerId} />
       <header className="game-header">
         <span className="mini-brand">
