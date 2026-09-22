@@ -114,6 +114,14 @@ export function registerHandlers(io: GameServer, socket: GameSocket, rooms: Room
       acknowledge,
     ),
   );
+  socket.on("game:emoji", (payload, acknowledge) =>
+    gameCommand(
+      payload,
+      z.object({ targetPlayerId: z.string().uuid(), emoji: z.string().trim().min(1).max(8) }),
+      (identity, parsed) => rooms.sendEmoji(identity.roomCode, identity.playerId, parsed.targetPlayerId, parsed.emoji),
+      acknowledge,
+    ),
+  );
 
   socket.on("disconnect", () => {
     const roomCode = rooms.disconnect(socket.id);

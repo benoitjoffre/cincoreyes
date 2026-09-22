@@ -5,6 +5,7 @@ import {
   type CommandResult,
   type MeldSubmission,
   type PublicPlayer,
+  type Reaction,
   type SessionData,
   type Suit,
 } from "@cincoreyes/contracts";
@@ -101,6 +102,37 @@ function SortableHandCard({ card, selected, grouped, onClick }: { card: CardMode
   return (
     <div className={`sortable-card${isDragging ? " dragging" : ""}`} style={{ transform: CSS.Transform.toString(transform), transition }}>
       <Card card={card} selected={selected} grouped={grouped} onClick={onClick} buttonRef={setNodeRef} dragProps={{ ...attributes, ...listeners }} />
+    </div>
+  );
+}
+
+function EmojiPicker({
+  player,
+  reactions,
+  onSendEmoji,
+}: {
+  player: PublicPlayer;
+  reactions: Reaction[];
+  onSendEmoji: (targetPlayerId: string, emoji: string) => void;
+}) {
+  const emojiOptions = ["🙂", "😄", "😂", "😍", "🔥", "👏", "💩", "🖕"];
+  return (
+    <div className="emoji-picker">
+      <div className="emoji-buttons">
+        {emojiOptions.map((emoji) => (
+          <button
+            key={`${player.id}-${emoji}`}
+            type="button"
+            className="emoji-button"
+            aria-label={`Envoyer ${emoji} à ${player.name}`}
+            title={`Envoyer ${emoji} à ${player.name}`}
+            onClick={() => onSendEmoji(player.id, emoji)}
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+      {reactions.length > 0 && <span className="reaction-bubble">{reactions[reactions.length - 1].emoji}</span>}
     </div>
   );
 }
@@ -430,6 +462,7 @@ function Game({
   onGoOut,
   onLeave,
   onKick,
+  onSendEmoji,
 }: {
   state: ClientGameState;
   playerId: string;
@@ -440,6 +473,7 @@ function Game({
   onGoOut: (melds: MeldSubmission[], discardCardId?: string) => void;
   onLeave: () => void;
   onKick: (playerId: string) => void;
+  onSendEmoji: (targetPlayerId: string, emoji: string) => void;
 }) {
   const { t } = useI18n();
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -541,6 +575,11 @@ function Game({
                 </small>
               </div>
               {!player.connected && <DisconnectedPlayerControl player={player} canKick={me?.isHost === true} busy={busy} onKick={onKick} />}
+              <EmojiPicker
+                player={player}
+                reactions={state.reactions.filter((reaction) => reaction.toPlayerId === player.id)}
+                onSendEmoji={onSendEmoji}
+              />
             </div>
           ))}
       </section>
@@ -769,6 +808,7 @@ export default function App() {
       onGoOut={(melds, discardCardId) => run("turn:go-out", { actionId: actionId(), melds, discardCardId })}
       onLeave={leaveRoom}
       onKick={(playerId) => run("room:kick", { playerId })}
+      onSendEmoji={(targetPlayerId, emoji) => run("game:emoji", { targetPlayerId, emoji })}
     />
   );
 }

@@ -21,6 +21,7 @@ export interface ClientToServerEvents {
     payload: { actionId: string; melds: MeldSubmission[]; discardCardId?: string },
     acknowledge: (result: CommandResult) => void,
   ) => void;
+  "game:emoji": (payload: { targetPlayerId: string; emoji: string }, acknowledge: (result: CommandResult) => void) => void;
 }
 
 export interface ServerToClientEvents {

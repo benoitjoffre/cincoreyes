@@ -87,4 +87,68 @@ describe("multiplayer server", () => {
     expect(discarded.ok).toBe(true);
     await discardedStatePromise;
   });
+
+  it("rejects emoji reactions before the game starts", async () => {
+    const server = createGameServer("*");
+    servers.push(server);
+    await new Promise<void>((resolve) => server.httpServer.listen(0, resolve));
+    const port = (server.httpServer.address() as AddressInfo).port;
+    const host = createClient(`http://localhost:${port}`);
+    const guest = createClient(`http://localhost:${port}`);
+    clients.push(host, guest);
+    await Promise.all([
+      new Promise<void>((resolve) => host.once("connect", () => resolve())),
+      new Promise<void>((resolve) => guest.once("connect", () => resolve())),
+    ]);
+
+    const created = await command<SessionData>(host, "room:create", { playerName: "Alice" });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const joined = await command<SessionData>(guest, "room:join", { roomCode: created.data.roomCode, playerName: "Bob" });
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) return;
+
+    const reaction = await command(host, "game:emoji", { targetPlayerId: joined.data.playerId, emoji: "💩" });
+    expect(reaction).toMatchObject({ ok: false, code: "INVALID_PHASE" });
+  });
+
+  it("broadcasts reactions to all players in the room", async () => {
+    const server = createGameServer("*");
+    servers.push(server);
+    await new Promise<void>((resolve) => server.httpServer.listen(0, resolve));
+    const port = (server.httpServer.address() as AddressInfo).port;
+    const host = createClient(`http://localhost:${port}`);
+    const guest = createClient(`http://localhost:${port}`);
+    clients.push(host, guest);
+    await Promise.all([
+      new Promise<void>((resolve) => host.once("connect", () => resolve())),
+      new Promise<void>((resolve) => guest.once("connect", () => resolve())),
+    ]);
+
+    const created = await command<SessionData>(host, "room:create", { playerName: "Alice" });
+    expect(created.ok).toBe(true);
+    if (!created.ok) return;
+    const joined = await command<SessionData>(guest, "room:join", { roomCode: created.data.roomCode, playerName: "Bob" });
+    expect(joined.ok).toBe(true);
+    if (!joined.ok) return;
+
+    const start = await command(host, "game:start", { actionId: crypto.randomUUID() });
+    expect(start.ok).toBe(true);
+    if (!start.ok) return;
+
+    const hostReactionPromise = waitForState(host, ({ reactions }) =>
+      reactions.some(
+        (reaction) => reaction.toPlayerId === joined.data.playerId && reaction.fromPlayerId === created.data.playerId && reaction.emoji === "💩",
+      ),
+    );
+    const guestReactionPromise = waitForState(guest, ({ reactions }) =>
+      reactions.some(
+        (reaction) => reaction.toPlayerId === joined.data.playerId && reaction.fromPlayerId === created.data.playerId && reaction.emoji === "💩",
+      ),
+    );
+
+    const reaction = await command(host, "game:emoji", { targetPlayerId: joined.data.playerId, emoji: "💩" });
+    expect(reaction.ok).toBe(true);
+    await Promise.all([hostReactionPromise, guestReactionPromise]);
+  });
 });

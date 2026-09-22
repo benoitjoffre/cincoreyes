@@ -404,7 +404,7 @@ input:focus {
 .player-row {
   min-height: 72px;
   display: grid;
-  grid-template-columns: 40px 44px 1fr auto;
+  grid-template-columns: 40px 44px 1fr auto auto;
   gap: 15px;
   align-items: center;
   padding: 8px 20px;
@@ -448,6 +448,129 @@ input:focus {
   color: var(--green-dark);
   font-weight: 800;
 }
+.emoji-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.emoji-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.emoji-button {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(31, 91, 69, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  position: relative;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+  animation: pop-in 0.22s ease-out;
+}
+
+.emoji-button::before {
+  content: "";
+  position: absolute;
+  inset: -5px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(246, 203, 100, 0.5), transparent 70%);
+  opacity: 0;
+  transition: opacity 0.18s ease;
+}
+
+.emoji-button:hover {
+  transform: translateY(-2px) scale(1.12);
+  border-color: rgba(31, 91, 69, 0.7);
+  box-shadow: 0 8px 18px rgba(31, 91, 69, 0.18);
+}
+
+.emoji-button:hover::before {
+  opacity: 1;
+}
+
+.reaction-bubble {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  min-width: 34px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #f6cb64, #ffec9d 48%, #f2b535);
+  color: #1d1d1d;
+  font-size: 18px;
+  box-shadow:
+    0 8px 18px rgba(246, 203, 100, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+  animation: float-bounce 0.8s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  transform-origin: center;
+  filter: drop-shadow(0 0 12px rgba(246, 203, 100, 0.5));
+}
+
+.reaction-bubble::after {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  border-radius: 999px;
+  border: 2px solid rgba(246, 203, 100, 0.7);
+  opacity: 0;
+  animation: pulse-ring 0.8s ease-out;
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.14);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes float-bounce {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.7) rotate(-10deg);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-8px) scale(1.2) rotate(7deg);
+  }
+  55% {
+    transform: translateY(2px) scale(1.03) rotate(-2deg);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0deg);
+  }
+}
+
+@keyframes pulse-ring {
+  0% {
+    opacity: 0.8;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.22);
+  }
+}
+
 .empty-seat {
   padding: 24px;
   color: #797c74;

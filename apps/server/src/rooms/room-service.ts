@@ -7,6 +7,7 @@ import {
   type GamePhase,
   type MeldSubmission,
   type Rank,
+  type Reaction,
   type RevealedMeld,
   type SessionData,
 } from "@cincoreyes/contracts";
@@ -39,6 +40,7 @@ interface RoomState {
   revealedPlayerMelds: Map<string, RevealedMeld[]>;
   processedActions: Set<string>;
   phaseBeforePause: Exclude<GamePhase, "paused"> | null;
+  reactions: Reaction[];
 }
 
 export class GameError extends Error {
@@ -82,6 +84,7 @@ export class RoomService {
       revealedPlayerMelds: new Map(),
       processedActions: new Set(),
       phaseBeforePause: null,
+      reactions: [],
     };
     this.rooms.set(code, room);
     this.sessions.set(player.sessionToken, { roomCode: code, playerId: player.id });
@@ -218,6 +221,29 @@ export class RoomService {
     this.finishTurn(room, playerId);
   }
 
+  sendEmoji(roomCode: string, fromPlayerId: string, targetPlayerId: string, emoji: string): void {
+    const room = this.getRoom(roomCode);
+    const from = this.getPlayer(room, fromPlayerId);
+    const target = this.getPlayer(room, targetPlayerId);
+    const allowed = new Set(["🙂", "😄", "😂", "😍", "🔥", "👏", "💩", "🖕"]);
+
+    if (room.phase === "lobby" || room.phase === "game-ended") {
+      throw new GameError("INVALID_PHASE", "Les emojis ne sont disponibles qu’en cours de partie.");
+    }
+    if (!allowed.has(emoji)) throw new GameError("INVALID_EMOJI", "Emoji invalide.");
+    if (from.id === target.id) throw new GameError("INVALID_TARGET", "Tu ne peux pas t’envoyer un emoji à toi-même.");
+
+    room.reactions.push({
+      id: randomUUID(),
+      fromPlayerId: from.id,
+      toPlayerId: target.id,
+      emoji,
+      createdAt: this.now(),
+    });
+    room.reactions = room.reactions.slice(-20);
+    this.bump(room);
+  }
+
   disconnect(socketId: string): string | null {
     for (const room of this.rooms.values()) {
       const player = room.players.find((candidate) => candidate.socketId === socketId);
@@ -275,6 +301,7 @@ export class RoomService {
         playerId: revealedPlayerId,
         melds,
       })),
+      reactions: room.reactions,
     };
   }
 

@@ -31,6 +31,14 @@ export interface RevealedPlayerMelds {
   melds: RevealedMeld[];
 }
 
+export interface Reaction {
+  id: string;
+  fromPlayerId: string;
+  toPlayerId: string;
+  emoji: string;
+  createdAt: number;
+}
+
 export type GamePhase = "lobby" | "drawing" | "discarding" | "round-ended" | "game-ended" | "paused";
 
 export interface ClientGameState {
@@ -47,6 +55,7 @@ export interface ClientGameState {
   wentOutPlayerId: string | null;
   finalTurnPlayerIds: string[];
   revealedPlayerMelds: RevealedPlayerMelds[];
+  reactions: Reaction[];
 }
 
 export interface MeldSubmission {
